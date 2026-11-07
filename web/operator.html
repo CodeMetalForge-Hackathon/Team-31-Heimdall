@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>HEIMDALL · Drone Operator</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/heimdall.css">
+</head>
+<body>
+  <header class="op-top">
+    <div class="op-title">HEIMDALL <span>· Drone Operator</span></div>
+    <span class="pill connecting" id="conn">connecting</span>
+    <span class="topchip" id="drone">Drone: <b>—</b></span>
+    <span class="topchip compass" id="compass" title="Station heading">
+      <svg viewBox="-12 -12 24 24" aria-hidden="true">
+        <circle r="10.5" fill="none" stroke="#24303c" stroke-width="1.5"/>
+        <g id="compass-needle"><path d="M0 -9 L3 0 L0 -2 L-3 0 Z" fill="#ffb020"/><path d="M0 9 L3 0 L0 2 L-3 0 Z" fill="#55606b"/></g>
+      </svg>
+      <b id="compass-text" class="num">—</b>
+    </span>
+    <div class="mode-toggle" role="group" aria-label="Camera mode">
+      <button type="button" id="mode-auto" class="on" aria-pressed="true">AUTO</button>
+      <button type="button" id="mode-manual" aria-pressed="false">MANUAL</button>
+    </div>
+    <span class="health" id="health" aria-label="Station modules"></span>
+  </header>
+
+  <main class="op-main">
+    <div class="op-col">
+      <section class="panel" aria-label="Thermal view">
+        <p class="label">Thermal</p>
+        <div class="thermal-wrap" id="thermal-wrap">
+          <canvas id="thermal-mock"></canvas>
+          <img id="thermal-img" alt="Thermal camera" class="hidden">
+          <canvas id="thermal-overlay"></canvas>
+          <span class="thermal-tag tl" id="thermal-max">max — °C</span>
+          <span class="thermal-tag tr" id="thermal-pt">pan — · tilt —</span>
+          <span class="thermal-tag bl" id="thermal-src">no feed</span>
+        </div>
+      </section>
+
+      <section class="panel dial-panel" aria-label="Direction">
+        <p class="label">Direction to target</p>
+        <div class="target-name" id="target-name">No signal yet</div>
+        <svg class="dial" id="dial" viewBox="-110 -110 220 220" role="img" aria-label="Direction dial">
+          <circle r="96" fill="#0e141b" stroke="#24303c" stroke-width="1.5"/>
+          <circle r="64" fill="none" stroke="#1c252f" stroke-width="1"/>
+          <circle r="32" fill="none" stroke="#1c252f" stroke-width="1"/>
+          <g id="dial-ticks"></g>
+          <text x="0" y="-100" text-anchor="middle" fill="#8a96a3" font-size="9" font-weight="700" letter-spacing="1">FRONT</text>
+          <text x="104" y="3" text-anchor="start" fill="#55606b" font-size="9">R</text>
+          <text x="-104" y="3" text-anchor="end" fill="#55606b" font-size="9">L</text>
+          <g id="dial-hist"></g>
+          <g id="dial-cam"><line x1="0" y1="0" x2="0" y2="-92" stroke="#e8edf2" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.7"/><circle cx="0" cy="-92" r="2.5" fill="#e8edf2" opacity="0.8"/></g>
+          <g id="dial-arrow" opacity="0">
+            <line x1="0" y1="-12" x2="0" y2="-70" stroke="#ffb020" stroke-width="9" stroke-linecap="round"/>
+            <path d="M0 -94 L13 -68 L-13 -68 Z" fill="#ffb020"/>
+          </g>
+          <!-- station seen from above, front arrow at top -->
+          <rect x="-11" y="-11" width="22" height="22" rx="4" fill="#18212b" stroke="#8a96a3" stroke-width="1.5"/>
+          <path d="M0 -20 L5 -12 L-5 -12 Z" fill="#8a96a3"/>
+        </svg>
+        <div class="instr idle" id="instr">WAITING</div>
+        <div class="instr-sub" id="instr-sub">&nbsp;</div>
+        <div class="instr-note" id="instr-note"></div>
+      </section>
+    </div>
+
+    <div class="op-col">
+      <section class="panel" aria-label="Triage queue">
+        <p class="label">Triage queue <span class="count" id="queue-count"></span></p>
+        <div class="queue" id="queue"><div class="queue-empty">No victims heard yet.</div></div>
+      </section>
+
+      <section class="panel" aria-label="Sensors">
+        <p class="label">Sensors</p>
+        <div class="sensors">
+          <div class="scard"><p class="label">Radar</p><div class="sbig" id="radar-pres">—</div><div class="sline" id="radar-line">no data</div></div>
+          <div class="scard"><p class="label">Knock</p><div class="sbig" id="knock-big">—</div><div class="sline" id="knock-line">no knocks yet</div></div>
+          <div class="scard"><p class="label">Sound</p><div class="sbig" id="sound-big">—</div><div class="sline" id="sound-line">no data</div></div>
+          <div class="scard"><p class="label">Noise</p>
+            <div class="noisebars" id="noise-bars"><div><i></i></div><div><i></i></div><div><i></i></div><div><i></i></div></div>
+            <div class="sline" id="noise-line">no data</div>
+          </div>
+          <div class="scard"><p class="label">LoRa</p><div class="sbig" id="lora-big">—</div><div class="sline" id="lora-line">no data</div></div>
+          <div class="scard"><p class="label">Camera</p><div class="sbig" id="cam-big">—</div><div class="sline" id="cam-line">no data</div></div>
+        </div>
+      </section>
+
+      <section class="panel aim hidden" id="aim" aria-label="Manual aim">
+        <p class="label">Manual aim</p>
+        <div class="row"><label for="aim-pan">Pan</label><input type="range" id="aim-pan" min="-90" max="90" step="1" value="0"><output id="aim-pan-v" class="num">0°</output></div>
+        <div class="row"><label for="aim-tilt">Tilt</label><input type="range" id="aim-tilt" min="-30" max="60" step="1" value="0"><output id="aim-tilt-v" class="num">0°</output></div>
+        <button type="button" class="btn" id="aim-center">Center</button>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/ui-operator.js"></script>
+  <script>
+    const MOCK = new URLSearchParams(location.search).has('mock') || location.protocol === 'file:';
+    const files = MOCK ? ['js/mock.js'] : ['js/operator-live.js'];
+    for (const f of files) { const s = document.createElement('script'); s.src = f; s.async = false; document.body.appendChild(s); }
+  </script>
+</body>
+</html>
