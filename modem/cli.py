@@ -121,7 +121,12 @@ def cmd_live(a):
         q.put(indata[:, a.channel].copy())
 
     d = ac1.Decoder(fs)
-    rec = [] if a.record else None
+    rec = None
+    if a.record:                       # written as it goes: survives a kill (wave patches the header)
+        rec = wave.open(a.record, "wb")
+        rec.setnchannels(1)
+        rec.setsampwidth(2)
+        rec.setframerate(fs)
     stats = {b: 0 for b in range(4)}
     busy = 0.0
     audio = 0.0
@@ -148,7 +153,7 @@ def cmd_live(a):
                     continue
                 last_audio = time.time()
                 if rec is not None:
-                    rec.append(x)
+                    rec.writeframes((np.round(np.clip(x, -1, 1) * 32767)).astype("<i2").tobytes())
                 t0 = time.perf_counter()
                 frames = d.feed(x)
                 busy += time.perf_counter() - t0
@@ -184,7 +189,7 @@ def cmd_live(a):
     print("preamble detections (band, outcome): " +
           ", ".join(f"b{b} {o}={n}" for (b, o), n in sorted(outc.items())), file=sys.stderr)
     if rec is not None:
-        write_wav(a.record, np.concatenate(rec), fs)
+        rec.close()
         print(f"recorded {a.record}", file=sys.stderr)
 
 
