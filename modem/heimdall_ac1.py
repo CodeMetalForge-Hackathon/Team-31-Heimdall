@@ -388,6 +388,7 @@ class Decoder:
         self._recent: list[tuple[bytes, int]] = []
         self.candidates: list[dict] = []
         self.level_db = -120.0          # RMS of the last fed chunk (dBFS)
+        self.band_ratio_db = {b: 0.0 for b in self.bands}   # last block: 20log10(max/median)
 
     # -- public
     def feed(self, samples) -> list[Frame]:
@@ -438,6 +439,7 @@ class Decoder:
             med = float(np.median(h[m0 - h0:end - h0:MEDIAN_STRIDE]))
             thr = max(DETECT_RATIO * med, ABS_FLOOR)
             seg = h[lb - h0:end - h0]
+            self.band_ratio_db[b] = 20 * math.log10(float(seg[lo_r - lb:].max()) / max(med, 1e-12) + 1e-12)
             above = np.concatenate([[False], seg > thr, [False]])
             edges = np.flatnonzero(above[1:] != above[:-1])
             if len(edges) == 0:
