@@ -9,7 +9,7 @@ const uint8_t KNOCK_PIN = 2;
 
 // Calibration: raw servo angle (0..180) where pan points at the front arrow and tilt is level.
 // Find them with the R command, then edit these two numbers and re-upload.
-int panCenter = 90;
+int panCenter = 35;
 int tiltLevel = 90;
 // Flip to -1 if a positive command turns the wrong way (pan + = RIGHT, tilt + = UP).
 const int PAN_DIR = 1;
