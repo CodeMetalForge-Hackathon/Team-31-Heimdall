@@ -63,10 +63,14 @@
       v.minutes += 8 / 60 * 4; // sped up 4x so the counter visibly climbs in a demo
       v.knock = id === '1A2B' ? elapsed() > 25 : v.knock;
       const d = drift(id);
+      // SPEC v1.1: the first frame of a beacon is unconfirmed until a second one arrives
+      const confirmed = heardBefore.has(id);
+      heardBefore.add(id);
       send({ t: 'victim', id, floor: v.floor, minutes: Math.floor(v.minutes), motion: v.motion, status: v.status, people: v.people,
-        battery: v.battery, hops: v.hops, knock: v.knock, deg: d, band: v.band, snr_db: round1(rnd(9, 22)) });
-      lastTarget = id;
+        battery: v.battery, hops: v.hops, knock: v.knock, deg: d, band: v.band, snr_db: round1(rnd(9, 22)), confirmed });
+      if (confirmed) lastTarget = id; // the camera never chases an unconfirmed beacon
     }
+    const heardBefore = new Set();
 
     // victims every ~8 s (staggered), 5E09 shows up after 20 s
     victimEvent('1A2B');
@@ -74,6 +78,20 @@
     setInterval(() => victimEvent('1A2B'), 8000);
     setTimeout(() => setInterval(() => victimEvent('77C1'), 8000), 4000);
     setTimeout(() => { victimEvent('5E09'); setInterval(() => victimEvent('5E09'), 8000); }, 20000);
+
+    // B40E: only known from a phone's relay report, so the station has no direction (deg null)
+    const B40E = { id: 'B40E', floor: 1, minutes: 22, motion: true, status: 'injured', people: 3, battery: 2, hops: 1, knock: false, band: 0 };
+    function phoneOnlyEvent() {
+      const confirmed = heardBefore.has('B40E');
+      heardBefore.add('B40E');
+      B40E.minutes += 8 / 60 * 4;
+      send(Object.assign({ t: 'victim' }, B40E, { minutes: Math.floor(B40E.minutes), deg: null, snr_db: round1(rnd(6, 12)), confirmed }));
+    }
+    setTimeout(() => { phoneOnlyEvent(); setInterval(phoneOnlyEvent, 8000); }, 20000);
+
+    // C0DE: heard once (maybe a false alarm), never confirmed, disappears after 60 s
+    setTimeout(() => send({ t: 'victim', id: 'C0DE', floor: null, minutes: 0, motion: true, status: 'no_response', people: 1,
+      battery: 3, hops: 0, knock: false, deg: round1(rnd(60, 90)), band: 2, snr_db: 6.5, confirmed: false }), 10000);
 
     // bearings: mostly tags, sometimes an unknown human sound, sometimes a head-scan
     setInterval(() => {
