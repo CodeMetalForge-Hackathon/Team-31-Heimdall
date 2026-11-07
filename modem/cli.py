@@ -113,8 +113,11 @@ def cmd_live(a):
         return
     fs = a.fs or int(sd.query_devices(a.device, "input")["default_samplerate"])
     q: queue.Queue = queue.Queue()
+    xruns = [0]
 
     def cb(indata, frames, t, status):
+        if status:
+            xruns[0] += 1
         q.put(indata[:, a.channel].copy())
 
     d = ac1.Decoder(fs)
@@ -124,6 +127,7 @@ def cmd_live(a):
     audio = 0.0
     t_start = time.time()
     last_meter = 0.0
+    last_audio = t_start
     ch = a.channel + 1
     print(f"listening on device {a.device if a.device is not None else 'default'} @ {fs} Hz "
           f"(Ctrl-C to stop)", file=sys.stderr)
@@ -137,8 +141,12 @@ def cmd_live(a):
                     if audio == 0 and time.time() - t_start > 3:
                         sys.stderr.write("\rno audio from the mic yet (macOS: allow microphone access "
                                          "for this terminal in System Settings > Privacy)  ")
-                        sys.stderr.flush()
+                    elif audio > 0:
+                        sys.stderr.write(f"\rMIC STALLED: no audio for {time.time() - last_audio:.0f} s "
+                                         f"(macOS paused capture?)  ")
+                    sys.stderr.flush()
                     continue
+                last_audio = time.time()
                 if rec is not None:
                     rec.append(x)
                 t0 = time.perf_counter()
@@ -158,13 +166,16 @@ def cmd_live(a):
                     bar = "#" * int(max(0, min(30, (lvl + 80) / 80 * 30)))
                     ratios = " ".join(f"b{b}:{d.band_ratio_db[b]:4.1f}" for b in range(4))
                     sys.stderr.write(f"\r{lvl:6.1f} dBFS |{bar:<30}| MF dB {ratios} | "
-                                     f"cpu {100 * busy / max(audio, 1e-9):4.1f}%  ")
+                                     f"cpu {100 * busy / max(audio, 1e-9):4.1f}% | "
+                                     f"audio {audio:.0f}/{now - t_start:.0f} s  ")
                     sys.stderr.flush()
     except KeyboardInterrupt:
         pass
     print("\n--- summary ---", file=sys.stderr)
-    print(f"ran {audio:.0f} s, decoder cpu {100 * busy / max(audio, 1e-9):.2f}% of one core",
-          file=sys.stderr)
+    wall = time.time() - t_start
+    print(f"captured {audio:.0f} s of audio in {wall:.0f} s wall clock"
+          f"{'  <-- CAPTURE GAPS' if audio < wall - 3 else ''}; input over/underflows {xruns[0]}; "
+          f"decoder cpu {100 * busy / max(audio, 1e-9):.2f}% of one core", file=sys.stderr)
     print("frames per band: " + ", ".join(f"b{b}={n}" for b, n in stats.items()), file=sys.stderr)
     outc = {}
     for c in d.candidates:
