@@ -25,9 +25,12 @@ CONFIG = {
         "ring_s": 8.0,               # seconds of all channels kept for the bearing windows
         "decode_channel": 2,         # channel fed to the decoder: 2..5 = a raw mic, "asr" = ch1 (processed)
         "doa_window": "preamble",    # "preamble" = the 200 ms preamble, "frame" = preamble start .. frame end
-        # Mic openings (x, y) in meters, keyed by raw channel. Origin = array center, +x = front arrow,
-        # +y = right (SPEC 2). PLACEHOLDER square until measured on the case (Part B).
-        "mic_xy": {2: (0.0230, 0.0230), 3: (-0.0230, 0.0230), 4: (-0.0230, -0.0230), 5: (0.0230, -0.0230)},
+        # Mic openings (x, y) in meters, keyed by raw channel. Origin = array center, +x = front arrow
+        # (12 o'clock, opposite the USB cable), +y = right (SPEC 2). Measured: 6.65 cm square, 9.35 cm diagonal.
+        "mic_xy": {4: (0.03325, -0.03325),    # 10:30 front-left
+                   5: (0.03325, 0.03325),     # 1:30 front-right
+                   2: (-0.03325, 0.03325),    # 4:30 back-right
+                   3: (-0.03325, -0.03325)},  # 7:30 back-left
         "speed_of_sound": 343.0,     # m/s
         "bearing_offset_deg": 0.0,   # added to every bearing so "ahead" reads 0 (calibration)
         "quiet_db": -55.0,           # noise.quiet = every band below this (dBFS)
