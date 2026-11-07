@@ -131,7 +131,14 @@ def cmd_live(a):
         with sd.InputStream(samplerate=fs, channels=ch, device=a.device, blocksize=1024,
                             dtype="float32", callback=cb):
             while True:
-                x = q.get()
+                try:
+                    x = q.get(timeout=0.5)
+                except queue.Empty:
+                    if audio == 0 and time.time() - t_start > 3:
+                        sys.stderr.write("\rno audio from the mic yet (macOS: allow microphone access "
+                                         "for this terminal in System Settings > Privacy)  ")
+                        sys.stderr.flush()
+                    continue
                 if rec is not None:
                     rec.append(x)
                 t0 = time.perf_counter()
