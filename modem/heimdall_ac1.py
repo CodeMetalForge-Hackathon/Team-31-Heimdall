@@ -60,8 +60,8 @@ N_SLOPES = 25             # drift grid, +-0.15 % clock error
 SLOPE_MAX = 0.0015 * 640
 REFINE = 4                # +-0.25 ms final per-symbol search around the fitted line
 ABS_FLOOR = 1e-3          # |corr| floor (unit-energy template), ignores digital silence
-MIN_QUALITY = 0.30        # mean (win-lose)/(win+lose) over symbols; real >= 0.33, junk <= 0.29
-MIN_RHO = 0.2             # normalized preamble correlation; leakage/clicks sit below 0.1
+MIN_QUALITY = 0.20        # mean (win-lose)/(win+lose); live 6 m frames reach 0.27, junk 0.38: weak gate
+MIN_RHO = 0.25            # normalized preamble correlation; live: real >= 0.27, junk <= 0.27
 RHO_NFFT = 4096
 
 N_PRE = int(round(PREAMBLE_S * DECODE_FS))          # 3200

@@ -31,7 +31,7 @@
   var MF_NFFT = 8192, SYM_NFFT = 32768, RHO_NFFT = 4096;
   var NMS_GUARD = 4000, MEDIAN_STRIDE = 8;
   var SEARCH_W = 72, INTERCEPT_MAX = 24, N_SLOPES = 25, SLOPE_MAX = 0.0015 * 640, REFINE = 4;
-  var ABS_FLOOR = 1e-3, MIN_QUALITY = 0.30, MIN_RHO = 0.2;
+  var ABS_FLOOR = 1e-3, MIN_QUALITY = 0.20, MIN_RHO = 0.25;
 
   var N_PRE = Math.round(PREAMBLE_S * DECODE_FS);   // 3200
   var N_GAP = Math.round(GAP_S * DECODE_FS);        // 160
@@ -368,7 +368,7 @@
 
   // ------------------------------------------------------------ decoder
   /**
-   * Streaming receiver. opts: {bands:[0,1,2,3], minQuality:0.30, track:true}.
+   * Streaming receiver. opts: {bands:[0,1,2,3], minQuality:0.20, track:true}.
    * `candidates` keeps the last 200 preamble detections with their outcome
    * ('ok','weak','crc','reserved','quality','busy','dup').
    */
