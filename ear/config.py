@@ -17,7 +17,25 @@ CONFIG = {
     # per-module settings (placeholders until the hardware is wired)
     "pantilt": {"port": "auto", "pan_center_raw": 90, "tilt_level_raw": 90},
     "thermal": {"device": "auto"},
-    "audio": {"device": "auto", "fs": 16000},
+    "audio": {
+        "device": "auto",            # sounddevice name or index; "auto" = first input whose name has XVF3800/reSpeaker
+        "fs": 16000,                 # the array's max rate; every SPEC band is below 7 kHz
+        "channels": 6,               # 6-ch firmware: ch0 conference, ch1 ASR, ch2-5 raw mics 0-3
+        "blocksize": 1024,
+        "ring_s": 8.0,               # seconds of all channels kept for the bearing windows
+        "decode_channel": 2,         # channel fed to the decoder: 2..5 = a raw mic, "asr" = ch1 (processed)
+        "doa_window": "preamble",    # "preamble" = the 200 ms preamble, "frame" = preamble start .. frame end
+        # Mic openings (x, y) in meters, keyed by raw channel. Origin = array center, +x = front arrow,
+        # +y = right (SPEC 2). PLACEHOLDER square until measured on the case (Part B).
+        "mic_xy": {2: (0.0230, 0.0230), 3: (-0.0230, 0.0230), 4: (-0.0230, -0.0230), 5: (0.0230, -0.0230)},
+        "speed_of_sound": 343.0,     # m/s
+        "bearing_offset_deg": 0.0,   # added to every bearing so "ahead" reads 0 (calibration)
+        "quiet_db": -55.0,           # noise.quiet = every band below this (dBFS)
+        "confirm_s": 60.0,           # a new id needs a 2nd frame within this to be confirmed (SPEC 1.7.6)
+        "direct_hold_s": 30.0,       # a hops-0 frame this recent makes relayed copies only refresh "last heard"
+        "ignore_direct_ids": [],     # relay demo: drop hops-0 frames from these ids, e.g. ["1A2B"]
+        "cpu_log_s": 30.0,           # how often to log the decoder CPU share
+    },
     "lora": {"freq_mhz": 915.0},
     "mock": {},
 }
