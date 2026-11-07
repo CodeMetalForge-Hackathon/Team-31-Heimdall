@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>HEIMDALL · SOS</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/heimdall.css">
+</head>
+<body>
+  <div class="knock-banner hidden" id="knock-banner" role="alert">
+    Rescuers are near.<small>Tap 3 times on something hard.</small>
+  </div>
+
+  <div class="overlay hidden" id="fall-overlay" role="alertdialog" aria-labelledby="fall-title">
+    <h2 id="fall-title">Fall detected</h2>
+    <div>Sending SOS in</div>
+    <div class="big" id="fall-sec">10</div>
+    <div>seconds</div>
+    <button type="button" class="btn" id="fall-cancel">Cancel</button>
+  </div>
+
+  <main class="vic">
+    <header class="vic-head">
+      <span class="brand">HEIMDALL</span>
+      <span class="myid">Your beacon ID <b id="my-id">----</b></span>
+    </header>
+
+    <div class="sos-wrap" id="sos-wrap">
+      <span class="ring"></span><span class="ring"></span><span class="ring"></span>
+      <button type="button" class="sos" id="sos" aria-pressed="false">SEND SOS</button>
+    </div>
+    <div class="beacon-line" id="beacon-line" aria-live="polite"></div>
+    <div class="err hidden" id="err" role="alert"></div>
+
+    <section class="vsec" aria-labelledby="h-status">
+      <h2 id="h-status">How are you?</h2>
+      <div class="status-row">
+        <button type="button" class="stbtn" data-s="ok" aria-pressed="false">OK</button>
+        <button type="button" class="stbtn" data-s="injured" aria-pressed="false">Injured</button>
+        <button type="button" class="stbtn" data-s="critical" aria-pressed="false">Critical</button>
+      </div>
+    </section>
+
+    <section class="vsec" aria-labelledby="h-people">
+      <h2 id="h-people">People with you</h2>
+      <div class="stepper">
+        <button type="button" class="btn" id="people-minus" aria-label="Fewer people">&minus;</button>
+        <span class="val" id="people-val">1</span>
+        <button type="button" class="btn" id="people-plus" aria-label="More people">+</button>
+      </div>
+    </section>
+
+    <section class="vsec" aria-labelledby="h-floor">
+      <h2 id="h-floor">Floor</h2>
+      <div class="stepper">
+        <button type="button" class="btn" id="floor-minus" aria-label="Lower floor">&minus;</button>
+        <span class="val" id="floor-val">?</span>
+        <button type="button" class="btn" id="floor-plus" aria-label="Higher floor">+</button>
+        <button type="button" class="btn unk" id="floor-unk">Unknown</button>
+      </div>
+      <p class="note">Phones can't read air pressure in the browser, so set your floor here.</p>
+    </section>
+
+    <section class="vsec">
+      <p class="label">Listening for other beacons</p>
+      <div class="meter"><i id="mic-meter"></i></div>
+      <p class="note" id="motion-line">Motion: —</p>
+    </section>
+
+    <details class="fold" id="settings">
+      <summary>Settings</summary>
+      <div class="fold-body">
+        <div class="toggle-row"><span>Relay other beacons<small>Repeat SOS calls this phone hears</small></span>
+          <label class="switch"><input type="checkbox" id="set-relay" aria-label="Relay other beacons"><i></i></label></div>
+        <div class="toggle-row"><span>Auto-SOS on fall<small>Start the SOS after a hard fall</small></span>
+          <label class="switch"><input type="checkbox" id="set-fall" aria-label="Auto-SOS on fall"><i></i></label></div>
+        <div class="toggle-row"><span>Demo speed<small>8-second bursts</small></span>
+          <label class="switch"><input type="checkbox" id="set-demo" aria-label="Demo speed"><i></i></label></div>
+        <div class="toggle-row"><span>Beacon ID<small>4 characters, 0-9 and A-F</small></span>
+          <span class="id-edit"><input id="set-id" maxlength="4" autocomplete="off" spellcheck="false" aria-label="Beacon ID"><button type="button" class="btn" id="set-id-save">Save</button></span></div>
+      </div>
+    </details>
+
+    <details class="fold" id="relay-fold">
+      <summary>Relay log <span class="count" id="log-count">(0)</span></summary>
+      <div class="fold-body">
+        <ul class="log" id="log"></ul>
+        <p class="log-empty" id="log-empty">Nothing heard yet.</p>
+      </div>
+    </details>
+  </main>
+
+  <script src="js/ui-victim.js"></script>
+  <script>
+    const MOCK = new URLSearchParams(location.search).has('mock') || location.protocol === 'file:';
+    const files = MOCK ? ['js/mock.js'] : ['js/heimdall-modem.js', 'js/victim-logic.js'];
+    for (const f of files) { const s = document.createElement('script'); s.src = f; s.async = false; document.body.appendChild(s); }
+  </script>
+</body>
+</html>

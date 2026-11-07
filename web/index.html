@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0f14">
+  <title>HEIMDALL</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/heimdall.css">
+</head>
+<body>
+  <main class="picker">
+    <!-- Abstract mark: a watchful eye made of concentric listening arcs -->
+    <svg class="mark" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r="56" fill="none" stroke="#24303c" stroke-width="2"/>
+      <path d="M14 60 Q60 18 106 60 Q60 102 14 60 Z" fill="none" stroke="#ffb020" stroke-width="4" stroke-linejoin="round"/>
+      <circle cx="60" cy="60" r="15" fill="none" stroke="#ffb020" stroke-width="4"/>
+      <circle cx="60" cy="60" r="5" fill="#ffb020"/>
+      <path d="M38 26 Q60 14 82 26" fill="none" stroke="#8a96a3" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+      <path d="M28 16 Q60 0 92 16" fill="none" stroke="#8a96a3" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/>
+    </svg>
+    <h1 class="wordmark">HEIMDALL</h1>
+    <p class="tagline">Hears who you can't see.</p>
+
+    <a class="role-btn help" href="victim.html">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" fill="none" stroke="#ff4d4d" stroke-width="3"/>
+        <circle cx="20" cy="20" r="7" fill="#ff4d4d"/>
+      </svg>
+      <div><strong>I need help</strong><span>Send an SOS beacon from this phone</span></div>
+    </a>
+    <a class="role-btn op" href="operator.html">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" fill="none" stroke="#ffb020" stroke-width="3"/>
+        <path d="M20 6 L25 20 L20 17 L15 20 Z" fill="#ffb020"/>
+        <circle cx="20" cy="20" r="2.5" fill="#ffb020"/>
+      </svg>
+      <div><strong>Drone operator</strong><span>Find and triage victims</span></div>
+    </a>
+    <a class="coming" href="#" aria-disabled="true" onclick="return false">Command post (coming soon)</a>
+
+    <p class="warn hidden" id="secure-warn">Microphone needs a secure (https) connection.</p>
+    <p class="foot">HEIMDALL · SEARCH AND RESCUE</p>
+  </main>
+  <script>
+    if (location.protocol !== 'https:' && location.protocol !== 'file:') {
+      document.getElementById('secure-warn').classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>
