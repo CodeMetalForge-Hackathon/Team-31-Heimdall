@@ -563,7 +563,7 @@ class Decoder:
         t_end = float(c.start + N_PRE + c.frac) / DECODE_FS
         snr = 20 * math.log10(c.peak / max(c.median, 1e-12))
         self._log(c, "ok", quality=round(quality, 3), rho=round(rho, 3), id=fields["id"])
-        return Frame(fields, raw, b, snr, t_end, int(round(t_end * self.fs)), quality)
+        return Frame(fields, raw, b, snr, t_end, int(math.floor(t_end * self.fs + 0.5)), quality)
 
     def _trim(self):
         keep_from = self._mf
