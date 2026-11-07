@@ -274,7 +274,7 @@ void setup() {
   Serial.println("==========================================");
 
   // 1. I2C scan
-  Wire.begin();               // XIAO default SDA=D4, SCL=D5
+  Wire.begin(D4, D5);         // SDA=D4, SCL=D5 (explicit, not the variant default)
   Wire.setClock(400000);
   i2cScan();
 
