@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heimdall Modem Test</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #181d23; --line: #2a313a; --text: #e7ecf1; --muted: #8b96a3;
+    --accent: #3ea6ff; --ok: #3ecf8e; --warn: #f5a524; --bad: #ff5d5d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 3px; }
+  input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                  border-radius: 8px; padding: 7px 8px; width: 100%; min-width: 0; }
+  input[type=checkbox] { width: 22px; height: 22px; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 10px; }
+  button { font: 600 17px/1.2 inherit; font-family: inherit; color: #fff; background: var(--accent); border: 0;
+           border-radius: 12px; padding: 18px 8px; cursor: pointer; touch-action: manipulation; }
+  button.on { background: var(--bad); }
+  button.listen { background: var(--ok); color: #062014; }
+  button.listen.on { background: var(--bad); color: #fff; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .meter { height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; margin: 6px 0; }
+  .meter > div { height: 100%; width: 0; background: var(--ok); transition: width .1s; }
+  .bands { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 12px; color: var(--muted); }
+  .bands .meter > div { background: var(--accent); }
+  .bands .meter.hit > div { background: var(--warn); }
+  #frames { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+  #frames li { border-top: 1px solid var(--line); padding: 8px 2px; }
+  #frames li:first-child { border-top: 0; }
+  #frames b { color: var(--ok); }
+  .warn { color: var(--warn); font-size: 13px; }
+  .err { color: var(--bad); font-size: 13px; }
+  @media (max-width: 420px) { .grid { grid-template-columns: repeat(2, 1fr); } button { font-size: 15px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>HEIMDALL-AC1 modem test</h1>
+  <div class="sub">Plays and decodes the acoustic frame from docs/SPEC.md. Turn media volume up.</div>
+
+  <section>
+    <div class="grid">
+      <label>id (hex)<input id="f-id" value="1A2B" maxlength="4" class="mono"></label>
+      <label>floor<input id="f-floor" value="2" placeholder="blank = unknown"></label>
+      <label>minutes<input id="f-minutes" type="number" value="14" min="0" max="126"></label>
+      <label>status<select id="f-status">
+        <option>no_response</option><option>ok</option><option selected>injured</option><option>critical</option>
+      </select></label>
+      <label>people<input id="f-people" type="number" value="2" min="0" max="7"></label>
+      <label>battery<input id="f-battery" type="number" value="3" min="0" max="3"></label>
+      <label>hops<input id="f-hops" type="number" value="0" min="0" max="3"></label>
+      <label>motion<input id="f-motion" type="checkbox" checked></label>
+      <label>knock<input id="f-knock" type="checkbox"></label>
+      <label>band<select id="band"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></label>
+      <label>burst period (s)<input id="period" type="number" value="3" min="2.2" step="0.1"></label>
+      <label>volume<input id="vol" type="range" min="0.05" max="1" step="0.05" value="1"></label>
+    </div>
+    <div class="row" style="margin-top:8px"><span>bytes <span id="hex" class="mono"></span></span><span id="played">played 0</span></div>
+    <div class="btns">
+      <button id="play">Play frame</button>
+      <button id="burst">Play burst</button>
+      <button id="listen" class="listen">Listen</button>
+    </div>
+    <div id="msg" class="warn" style="margin-top:8px"></div>
+  </section>
+
+  <section>
+    <div class="row"><span>mic <span id="lvl">–</span></span><span id="rate"></span><span id="cpu"></span></div>
+    <div class="meter"><div id="lvlbar"></div></div>
+    <div class="bands">
+      <div>b0 1.5–2.5k<div class="meter" id="m0"><div></div></div></div>
+      <div>b1 2.5–3.5k<div class="meter" id="m1"><div></div></div></div>
+      <div>b2 3.5–4.5k<div class="meter" id="m2"><div></div></div></div>
+      <div>b3 5.0–6.5k<div class="meter" id="m3"><div></div></div></div>
+    </div>
+    <div class="row" style="margin-top:6px"><span id="counts">decoded b0 0 · b1 0 · b2 0 · b3 0</span><span id="cands"></span></div>
+  </section>
+
+  <section>
+    <ul id="frames"><li class="sub">Decoded frames appear here.</li></ul>
+  </section>
+</main>
+
+<script src="js/heimdall-modem.js"></script>
+<script>
+(function () {
+  'use strict';
+  var HM = window.HeimdallModem;
+  var $ = function (id) { return document.getElementById(id); };
+  var ctx = null, burstTimer = null, played = 0, nextAt = 0;
+  var listening = null, counts = [0, 0, 0, 0];
+
+  function msg(text, cls) { $('msg').textContent = text || ''; $('msg').className = cls || 'warn'; }
+
+  function fields() {
+    var fl = $('f-floor').value.trim();
+    return {
+      id: $('f-id').value.trim().toUpperCase() || '0000',
+      floor: fl === '' || fl === '?' ? null : parseInt(fl, 10),
+      minutes: parseInt($('f-minutes').value, 10) || 0,
+      motion: $('f-motion').checked, status: $('f-status').value,
+      people: parseInt($('f-people').value, 10) || 0, battery: parseInt($('f-battery').value, 10) || 0,
+      hops: parseInt($('f-hops').value, 10) || 0, knock: $('f-knock').checked
+    };
+  }
+
+  function frameBytes() {
+    try { var b = HM.pack(fields()); $('hex').textContent = HM.toHex(b).replace(/(..)/g, '$1 ').trim(); return b; }
+    catch (e) { $('hex').textContent = '–'; msg(e.message, 'err'); return null; }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('input,select'), function (el) {
+    el.addEventListener('input', function () { msg(''); frameBytes(); });
+  });
+  frameBytes();
+
+  function audio() {
+    if (!ctx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC({ latencyHint: 'interactive' });
+    }
+    if (ctx.state !== 'running') ctx.resume();
+    return ctx;
+  }
+
+  var bufCache = {};
+  function playAt(when) {
+    var b = frameBytes();
+    if (!b) return false;
+    var c = audio(), band = parseInt($('band').value, 10);
+    var key = HM.toHex(b) + '/' + band + '/' + c.sampleRate, buf = bufCache[key];
+    if (!buf) {
+      var x = HM.synth(b, band, c.sampleRate);
+      buf = c.createBuffer(1, x.length, c.sampleRate);
+      buf.copyToChannel ? buf.copyToChannel(x, 0) : buf.getChannelData(0).set(x);
+      bufCache = {}; bufCache[key] = buf;
+    }
+    var src = c.createBufferSource(), g = c.createGain();
+    g.gain.value = parseFloat($('vol').value);
+    src.buffer = buf; src.connect(g); g.connect(c.destination);
+    src.start(Math.max(when, c.currentTime + 0.05));
+    played++;
+    $('played').textContent = 'played ' + played + ' (band ' + band + ')';
+    return true;
+  }
+
+  $('play').onclick = function () { msg(''); playAt(0); };
+
+  $('burst').onclick = function () {
+    if (burstTimer) {
+      clearInterval(burstTimer); burstTimer = null;
+      $('burst').classList.remove('on'); $('burst').textContent = 'Play burst';
+      return;
+    }
+    var c = audio();
+    var period = Math.max(2.2, parseFloat($('period').value) || 3);
+    nextAt = c.currentTime + 0.1;
+    // schedule on the audio clock, 1 s ahead, so a busy UI thread can't stretch the period
+    var tick = function () {
+      while (nextAt < c.currentTime + 1.0) {
+        if (!playAt(nextAt)) { $('burst').onclick(); return; }
+        nextAt += Math.max(2.2, parseFloat($('period').value) || period);
+      }
+    };
+    tick();
+    burstTimer = setInterval(tick, 250);
+    $('burst').classList.add('on'); $('burst').textContent = 'Stop burst';
+  };
+
+  // ---------------------------------------------------------------- listening
+  // Mic -> AudioWorklet (copies 2048-sample chunks) -> MessageChannel -> Worker (decoder).
+  // The main thread only draws. Fallback: ScriptProcessor + worker, then main-thread decode.
+  var MODEM_URL = new URL('js/heimdall-modem.js', location.href).href;
+  var WORKER_SRC =
+    'importScripts(' + JSON.stringify(MODEM_URL) + ');\n' +
+    'var dec, busy = 0, secs = 0, last = 0;\n' +
+    'function handle(x) {\n' +
+    '  var t0 = performance.now(), fr = dec.feed(x);\n' +
+    '  busy += performance.now() - t0; secs += x.length / dec.fs;\n' +
+    '  for (var i = 0; i < fr.length; i++) postMessage({ type: "frame", f: HeimdallModem.frameToJSON(fr[i]) });\n' +
+    '  var now = performance.now();\n' +
+    '  if (now - last > 150) { last = now;\n' +
+    '    var oc = {}; dec.candidates.forEach(function (c) { oc[c.outcome] = (oc[c.outcome] || 0) + 1; });\n' +
+    '    postMessage({ type: "stats", level: dec.level_db, ratio: dec.band_ratio_db, cpu: busy / 10 / Math.max(secs, 1e-9), cands: oc }); }\n' +
+    '}\n' +
+    'onmessage = function (e) {\n' +
+    '  var d = e.data;\n' +
+    '  if (d.type === "init") { dec = new HeimdallModem.Decoder(d.rate); if (d.port) d.port.onmessage = function (m) { handle(m.data); }; }\n' +
+    '  else if (d.type === "audio") handle(d.x);\n' +
+    '};\n';
+  var WORKLET_SRC =
+    'class Tap extends AudioWorkletProcessor {\n' +
+    '  constructor() { super(); this.b = new Float32Array(2048); this.n = 0; this.out = null;\n' +
+    '    this.port.onmessage = (e) => { if (e.data && e.data.port) this.out = e.data.port; }; }\n' +
+    '  process(inputs) {\n' +
+    '    var ch = inputs[0] && inputs[0][0];\n' +
+    '    if (ch && this.out) for (var i = 0; i < ch.length; i++) {\n' +
+    '      this.b[this.n++] = ch[i];\n' +
+    '      if (this.n === 2048) { this.out.postMessage(this.b, [this.b.buffer]); this.b = new Float32Array(2048); this.n = 0; }\n' +
+    '    }\n' +
+    '    return true;\n' +
+    '  }\n' +
+    '}\n' +
+    'registerProcessor("heimdall-tap", Tap);\n';
+
+  function blobURL(src, type) { return URL.createObjectURL(new Blob([src], { type: type })); }
+
+  function onDecoderMessage(d) {
+    if (d.type === 'frame') return addFrame(d.f);
+    if (d.type !== 'stats') return;
+    $('lvl').textContent = d.level.toFixed(1) + ' dBFS';
+    $('lvlbar').style.width = Math.max(0, Math.min(100, (d.level + 80) / 80 * 100)) + '%';
+    for (var b = 0; b < 4; b++) {
+      var r = d.ratio[b] || 0, m = $('m' + b);
+      m.firstChild.style.width = Math.max(0, Math.min(100, r / 40 * 100)) + '%';
+      m.classList.toggle('hit', r > 18.06);          // 20*log10(8): detection threshold
+    }
+    $('cpu').textContent = 'decoder ' + d.cpu.toFixed(1) + '% cpu';
+    var parts = [];
+    for (var k in d.cands) parts.push(k + ' ' + d.cands[k]);
+    $('cands').textContent = parts.length ? 'detections: ' + parts.join(' · ') : '';
+  }
+
+  function addFrame(f) {
+    counts[f.band]++;
+    $('counts').textContent = 'decoded ' + counts.map(function (n, b) { return 'b' + b + ' ' + n; }).join(' · ');
+    var ul = $('frames');
+    if (ul.firstChild && ul.firstChild.className === 'sub') ul.innerHTML = '';
+    var li = document.createElement('li');
+    var t = new Date().toLocaleTimeString();
+    li.innerHTML = '<b>' + f.id + '</b> · band ' + f.band + ' · SNR ' + f.snr_db.toFixed(1) + ' dB · q ' +
+      f.quality.toFixed(2) + ' · ' + t + '<br><span class="mono">' + f.status + ', floor ' +
+      (f.floor === null ? '?' : f.floor) + ', ' + f.minutes + ' min, people ' + f.people + ', batt ' + f.battery +
+      ', hops ' + f.hops + (f.motion ? ', motion' : '') + (f.knock ? ', knock' : '') + ' · ' + f.raw + '</span>';
+    ul.insertBefore(li, ul.firstChild);
+    while (ul.children.length > 100) ul.removeChild(ul.lastChild);
+  }
+
+  async function startListening() {
+    if (!window.isSecureContext) {
+      msg('Listening needs HTTPS (or localhost). Playback works over plain http.', 'err');
+      return;
+    }
+    var c = audio();
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+    var src = c.createMediaStreamSource(stream);
+    var sink = c.createGain(); sink.gain.value = 0; sink.connect(c.destination);
+    var L = { stream: stream, src: src, sink: sink, node: null, worker: null, dec: null };
+    try {
+      L.worker = new Worker(blobURL(WORKER_SRC, 'text/javascript'));
+      L.worker.onmessage = function (e) { onDecoderMessage(e.data); };
+    } catch (e) { L.worker = null; }
+    var mode;
+    if (L.worker && c.audioWorklet && window.MessageChannel) {
+      await c.audioWorklet.addModule(blobURL(WORKLET_SRC, 'application/javascript'));
+      var ch = new MessageChannel();
+      L.node = new AudioWorkletNode(c, 'heimdall-tap', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+      L.worker.postMessage({ type: 'init', rate: c.sampleRate, port: ch.port2 }, [ch.port2]);
+      L.node.port.postMessage({ port: ch.port1 }, [ch.port1]);
+      mode = 'AudioWorklet → Worker';
+    } else {
+      L.node = c.createScriptProcessor(4096, 1, 1);
+      if (L.worker) {
+        L.worker.postMessage({ type: 'init', rate: c.sampleRate });
+        L.node.onaudioprocess = function (e) {
+          var x = new Float32Array(e.inputBuffer.getChannelData(0));
+          L.worker.postMessage({ type: 'audio', x: x }, [x.buffer]);
+        };
+        mode = 'ScriptProcessor → Worker';
+      } else {
+        L.dec = new HM.Decoder(c.sampleRate);
+        var last = 0;
+        L.node.onaudioprocess = function (e) {
+          var fr = L.dec.feed(e.inputBuffer.getChannelData(0));
+          fr.forEach(function (f) { addFrame(HM.frameToJSON(f)); });
+          if (performance.now() - last > 150) {
+            last = performance.now();
+            onDecoderMessage({ type: 'stats', level: L.dec.level_db, ratio: L.dec.band_ratio_db, cpu: 0, cands: {} });
+          }
+        };
+        mode = 'main thread';
+      }
+    }
+    src.connect(L.node); L.node.connect(sink);
+    $('rate').textContent = c.sampleRate + ' Hz · ' + mode;
+    return L;
+  }
+
+  function stopListening(L) {
+    try { L.src.disconnect(); L.node.disconnect(); L.sink.disconnect(); } catch (e) {}
+    L.stream.getTracks().forEach(function (t) { t.stop(); });
+    if (L.worker) L.worker.terminate();
+  }
+
+  $('listen').onclick = function () {
+    if (listening) {
+      stopListening(listening); listening = null;
+      $('listen').classList.remove('on'); $('listen').textContent = 'Listen';
+      return;
+    }
+    msg('');
+    startListening().then(function (L) {
+      if (!L) return;
+      listening = L;
+      $('listen').classList.add('on'); $('listen').textContent = 'Stop listening';
+    }).catch(function (e) { msg('Mic error: ' + e.message, 'err'); });
+  };
+
+  if (!window.isSecureContext) msg('Plain http: Play works, Listen needs HTTPS (https://10.42.0.1:8443/modem_test.html).');
+})();
+</script>
+</body>
+</html>

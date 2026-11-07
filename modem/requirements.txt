@@ -1,0 +1,4 @@
+numpy>=1.22          # core modem (the only hard dependency)
+sounddevice>=0.4     # python -m modem.cli live
+matplotlib>=3.5      # python -m modem.cli analyze (PNG)
+pytest>=7            # python -m pytest modem/tests

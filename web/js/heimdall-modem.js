@@ -450,7 +450,7 @@
       var thr = Math.max(DETECT_RATIO * med, ABS_FLOOR);
       var mx = 0;
       for (i = loR; i < end; i++) if (h.at(i) > mx) mx = h.at(i);
-      this.band_ratio_db[b] = 20 * Math.log10(mx / Math.max(med, 1e-12) + 1e-12);
+      this.band_ratio_db[b] = 20 * Math.log10(mx / Math.max(med, ABS_FLOOR / DETECT_RATIO) + 1e-12);
       // runs above threshold -> one maximum per run
       var maxima = [], inRun = false, bestI = 0, bestV = 0;
       for (i = lb; i <= end; i++) {
@@ -499,7 +499,7 @@
 
   Decoder.prototype._log = function (c, outcome, extra) {
     var d = { band: c.band, t: round((c.start + N_PRE + c.frac) / DECODE_FS, 4),
-              snr_db: round(20 * Math.log10(c.peak / Math.max(c.median, 1e-12)), 1), outcome: outcome };
+              snr_db: round(20 * Math.log10(c.peak / Math.max(c.median, ABS_FLOOR / DETECT_RATIO)), 1), outcome: outcome };
     for (var k in extra) d[k] = extra[k];
     this.candidates.push(d);
     if (this.candidates.length > 200) this.candidates.splice(0, this.candidates.length - 200);
@@ -582,7 +582,7 @@
     this._log(c, 'ok', { quality: round(quality, 3), rho: round(rho, 3), id: fields.id });
     return {
       fields: fields, raw: raw, rawHex: hex, band: b,
-      snr_db: 20 * Math.log10(c.peak / Math.max(c.median, 1e-12)),
+      snr_db: 20 * Math.log10(c.peak / Math.max(c.median, ABS_FLOOR / DETECT_RATIO)),
       t_end_preamble: tEnd, sample_index: Math.floor(tEnd * this.fs + 0.5), quality: quality
     };
   };

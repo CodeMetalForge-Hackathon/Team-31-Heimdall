@@ -439,7 +439,7 @@ class Decoder:
             med = float(np.median(h[m0 - h0:end - h0:MEDIAN_STRIDE]))
             thr = max(DETECT_RATIO * med, ABS_FLOOR)
             seg = h[lb - h0:end - h0]
-            self.band_ratio_db[b] = 20 * math.log10(float(seg[lo_r - lb:].max()) / max(med, 1e-12) + 1e-12)
+            self.band_ratio_db[b] = 20 * math.log10(float(seg[lo_r - lb:].max()) / max(med, ABS_FLOOR / DETECT_RATIO) + 1e-12)
             above = np.concatenate([[False], seg > thr, [False]])
             edges = np.flatnonzero(above[1:] != above[:-1])
             if len(edges) == 0:
@@ -484,7 +484,7 @@ class Decoder:
 
     def _log(self, c: _Cand, outcome: str, **kw):
         d = {"band": c.band, "t": round(float(c.start + N_PRE + c.frac) / DECODE_FS, 4),
-             "snr_db": round(float(20 * math.log10(c.peak / max(c.median, 1e-12))), 1),
+             "snr_db": round(float(20 * math.log10(c.peak / max(c.median, ABS_FLOOR / DETECT_RATIO))), 1),
              "outcome": outcome}
         d.update(kw)
         self.candidates.append(d)
@@ -561,7 +561,7 @@ class Decoder:
         self._recent.append((raw, c.start))
         self._busy[b] = c.start + N_FRAME
         t_end = float(c.start + N_PRE + c.frac) / DECODE_FS
-        snr = 20 * math.log10(c.peak / max(c.median, 1e-12))
+        snr = 20 * math.log10(c.peak / max(c.median, ABS_FLOOR / DETECT_RATIO))
         self._log(c, "ok", quality=round(quality, 3), rho=round(rho, 3), id=fields["id"])
         return Frame(fields, raw, b, snr, t_end, int(math.floor(t_end * self.fs + 0.5)), quality)
 
