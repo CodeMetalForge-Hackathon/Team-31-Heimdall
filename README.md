@@ -33,7 +33,7 @@ pitch/            pitch material
 ```
 
 ## Running the Ear
-On the Pi (`ssh heimdall@heimdall.local`):
+On the Pi (`ssh heimdall@heimdall`, see "Getting into the Pi" below):
 ```bash
 cd ~/Team-31 && source ~/heimdall-venv/bin/activate
 ear/tools/make_cert.sh                      # once (certs last 30 days; --force to remake)
@@ -76,7 +76,17 @@ if __name__ == "__main__":         # standalone test:  python -m ear.modules.<na
 ## Field network
 - The Pi runs Wi-Fi hotspot **`HEIMDALL`**, password **`heimdallforge26`**, Pi at **`10.42.0.1`**.
 - Operator / victim phones join it and open **`https://10.42.0.1:8443/`** (debug: `https://10.42.0.1:8443/debug.html`). No internet on this network.
-- `ear/tools/net_mode.sh dev|demo|status` switches the built-in Wi-Fi between venue Wi-Fi (dev, SSH at `heimdall.local`) and the hotspot (demo). SSH over venue Wi-Fi drops when you switch to demo; reconnect via the hotspot (`ssh heimdall@10.42.0.1`) or Ethernet.
+- Two radios at once (`ear/tools/net_mode.sh dual`, already set up, survives reboots): the **ALFA USB adapter** (`rtw88_8821au`, built into the kernel) stays on the venue Wi-Fi for internet + Tailscale, the **built-in Wi-Fi** runs the hotspot.
+- Without the ALFA: `net_mode.sh dev|demo` switches the built-in Wi-Fi between venue Wi-Fi and hotspot (demo cuts internet and Tailscale; reconnect via `HEIMDALL` → `ssh heimdall@10.42.0.1`).
+- The venue password contains a `$`: always put it in **single quotes** in shell commands (`password 'PASS'`), or the shell eats part of it.
+
+## Getting into the Pi (SSH)
+BASE-X Guest Wi-Fi blocks devices from talking to each other, so SSH goes through **Tailscale** (free).
+1. Install Tailscale on your laptop (tailscale.com/download) and accept Namig's invite (he adds you under Users → Invite in the Tailscale admin).
+2. `ssh heimdall@heimdall` (password from Namig), then `ssh-copy-id heimdall@heimdall` so you don't need it again.
+3. On the hotspot (no Tailscale needed): join `HEIMDALL`, `ssh heimdall@10.42.0.1`.
+
+The Pi has no GitHub login. Code gets there from Namig's laptop: `git remote add pi heimdall@heimdall:Team-31` once, then `git push pi <branch>` and `git checkout <branch>` on the Pi.
 
 ### Certificate warning (once per phone)
 Phones only allow the microphone and motion sensors on HTTPS, and our cert is self-signed, so the browser warns once.
