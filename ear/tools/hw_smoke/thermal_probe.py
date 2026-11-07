@@ -1,102 +1,37 @@
 #!/usr/bin/env python3
-"""Grab one frame from the Hti thermal camera and report UVC yes/no."""
-from __future__ import annotations
+"""Find the Hti thermal camera and save what it sends.  python thermal_probe.py [video_index]"""
+import sys, glob
+import cv2
+import numpy as np
 
-import argparse
-import os
-import subprocess
-import sys
-
-OUT_DEFAULT = "/tmp/thermal_frame.jpg"
-
-
-def try_opencv(index: int, out_path: str) -> bool:
-    try:
-        import cv2  # type: ignore
-    except ImportError:
-        return False
-    cap = cv2.VideoCapture(index)
-    if not cap.isOpened():
-        return False
-    ok, frame = cap.read()
-    cap.release()
-    if not ok or frame is None:
-        return False
-    if not cv2.imwrite(out_path, frame):
-        return False
-    h, w = frame.shape[:2]
-    print(f"UVC yes: opencv /dev/video{index} {w}x{h} saved {out_path}")
-    return True
-
-
-def try_ffmpeg(dev: str, out_path: str) -> bool:
-    if not os.path.exists(dev):
-        return False
-    cmd = [
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-y",
-        "-f",
-        "v4l2",
-        "-i",
-        dev,
-        "-frames:v",
-        "1",
-        out_path,
-    ]
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-    if r.returncode != 0 or not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
-        return False
-    print(f"UVC yes: ffmpeg {dev} saved {out_path}")
-    return True
-
-
-def try_fswebcam(dev: str, out_path: str) -> bool:
-    if not os.path.exists(dev):
-        return False
-    cmd = ["fswebcam", "-d", dev, "--no-banner", "-r", "160x120", out_path]
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
-    if r.returncode != 0 or not os.path.isfile(out_path) or os.path.getsize(out_path) == 0:
-        return False
-    print(f"UVC yes: fswebcam {dev} saved {out_path}")
-    return True
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Heimdall thermal UVC probe")
-    ap.add_argument("--device", default=None, help="e.g. /dev/video0")
-    ap.add_argument("--out", default=OUT_DEFAULT)
-    args = ap.parse_args()
-
-    indices = []
-    if args.device:
-        if args.device.startswith("/dev/video"):
-            indices = [int(args.device.replace("/dev/video", ""))]
-        else:
-            indices = [0]
+def main():
+    if len(sys.argv) > 1:
+        idxs = [int(sys.argv[1])]
     else:
-        indices = list(range(0, 6))
-
-    for i in indices:
-        dev = args.device if args.device else f"/dev/video{i}"
-        if try_opencv(i, args.out):
-            return 0
-        if try_ffmpeg(dev, args.out):
-            return 0
-        if try_fswebcam(dev, args.out):
-            return 0
-
-    print("UVC no: no camera produced a frame")
-    return 1
-
+        idxs = sorted(int(p.replace("/dev/video", "")) for p in glob.glob("/dev/video*") if p[10:].isdigit())
+    found = []
+    for i in idxs:
+        cap = cv2.VideoCapture(i, cv2.CAP_V4L2)
+        if not cap.isOpened():
+            continue
+        fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+        fcc = "".join(chr((fourcc >> 8 * k) & 0xFF) for k in range(4))
+        w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        ok, frame = cap.read()
+        print(f"/dev/video{i}: {w}x{h} fourcc={fcc!r} read={ok} shape={None if frame is None else frame.shape}")
+        if ok:
+            cv2.imwrite(f"video{i}_converted.png", frame)
+            cap.set(cv2.CAP_PROP_CONVERT_RGB, 0)   # raw mode: thermal cams often hide temperatures here
+            ok2, raw = cap.read()
+            if ok2:
+                np.save(f"video{i}_raw.npy", raw)
+                print(f"   raw shape={raw.shape} dtype={raw.dtype} min={raw.min()} max={raw.max()}")
+            found.append(i)
+        cap.release()
+    if not found:
+        print("No camera gave a frame. Run `v4l2-ctl --list-devices` and `dmesg | tail -30` and send the output.")
+    else:
+        print("Saved PNG + NPY files. Send them to Namig with this output.")
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

@@ -1,198 +1,125 @@
-// Heimdall E1: Seeeduino Uno servo + SW-420 knock controller.
-// Serial 115200, newline. Servos: D5 pan, D6 tilt. Knock SIG: D2.
-// Servo power is external 5 V; share GND with the Seeeduino.
-
+// Heimdall station: pan-tilt servos + knock sensor.  Protocol: docs/SPEC.md section 4.
+// Pi -> board:  PING | P <pan> <tilt> | R <ch> <raw> | C <panCenterRaw> <tiltLevelRaw> | ?
+// board -> Pi:  HELLO HEIMDALL-SERVO 1 | PONG | OK ... | STATE ... | KNOCK <count> | ERR <line>
 #include <Servo.h>
 
-const int PIN_PAN = 5;
-const int PIN_TILT = 6;
-const int PIN_KNOCK = 2;
+const uint8_t PAN_PIN = 5;
+const uint8_t TILT_PIN = 6;
+const uint8_t KNOCK_PIN = 2;
 
-const int PAN_MIN_DEG = -90;
-const int PAN_MAX_DEG = 90;
-const int TILT_MIN_DEG = -30;
-const int TILT_MAX_DEG = 60;
+// Calibration: raw servo angle (0..180) where pan points at the front arrow and tilt is level.
+// Find them with the R command, then edit these two numbers and re-upload.
+int panCenter = 90;
+int tiltLevel = 90;
+// Flip to -1 if a positive command turns the wrong way (pan + = RIGHT, tilt + = UP).
+const int PAN_DIR = 1;
+const int TILT_DIR = 1;
 
-const unsigned long SLEW_MS = 12;
-const unsigned long KNOCK_SEP_MS = 120;
-const unsigned long KNOCK_GROUP_MS = 1500;
+const int PAN_MIN = -90, PAN_MAX = 90;
+const int TILT_MIN = -30, TILT_MAX = 60;
+const unsigned long STEP_MS = 15;   // smooth motion: update every 15 ms
+const float STEP_DEG = 2.0;         // max 2 degrees per update (~130 deg/s)
 
-Servo panServo;
-Servo tiltServo;
+const unsigned long KNOCK_LOCKOUT_MS = 120;  // hits closer than this count as one
+const unsigned long KNOCK_GROUP_MS = 1500;   // group ends after 1.5 s of quiet
 
-int panCenterRaw = 90;
-int tiltLevelRaw = 90;
-int panDeg = 0;
-int tiltDeg = 0;
-int panRaw = 90;
-int tiltRaw = 90;
-int targetPanRaw = 90;
-int targetTiltRaw = 90;
-unsigned long lastSlewMs = 0;
+Servo panServo, tiltServo;
+float panCur = 0, tiltCur = 0;
+int panTgt = 0, tiltTgt = 0;
+bool rawMode = false;
+unsigned long lastStep = 0;
 
-int knockCount = 0;
-unsigned long lastKnockMs = 0;
-int lastKnockLevel = LOW;
+int idleLevel = HIGH;
+unsigned long lastHit = 0;
+int hitCount = 0;
 
-String lineBuf;
+char buf[40];
+uint8_t bufLen = 0;
 
-int clampi(int v, int lo, int hi) {
-  if (v < lo) return lo;
-  if (v > hi) return hi;
-  return v;
+int rawPan(float d)  { return constrain(panCenter + PAN_DIR * (int)lround(d), 0, 180); }
+int rawTilt(float d) { return constrain(tiltLevel + TILT_DIR * (int)lround(d), 0, 180); }
+
+float approach(float cur, float tgt) {
+  float d = tgt - cur;
+  if (d > STEP_DEG) d = STEP_DEG;
+  if (d < -STEP_DEG) d = -STEP_DEG;
+  return cur + d;
 }
 
-int panToRaw(int deg) {
-  return clampi(panCenterRaw + deg, 0, 180);
-}
-
-int tiltToRaw(int deg) {
-  return clampi(tiltLevelRaw + deg, 0, 180);
-}
-
-void applyImmediate(int ch, int raw) {
-  raw = clampi(raw, 0, 180);
-  if (ch == 0) {
-    panRaw = raw;
-    targetPanRaw = raw;
-    panDeg = panRaw - panCenterRaw;
-    panServo.write(panRaw);
-  } else {
-    tiltRaw = raw;
-    targetTiltRaw = raw;
-    tiltDeg = tiltRaw - tiltLevelRaw;
-    tiltServo.write(tiltRaw);
-  }
-}
-
-void handleLine(String line) {
-  line.trim();
-  if (line.length() == 0) return;
-
-  if (line == "PING") {
-    Serial.println("PONG");
+void handleLine(char *s) {
+  while (*s == ' ') s++;
+  if (*s == 0) return;
+  int a, b;
+  if (strcmp(s, "PING") == 0) { Serial.println(F("PONG")); return; }
+  if (s[0] == '?') {
+    Serial.print(F("STATE P ")); Serial.print((int)lround(panCur));
+    Serial.print(F(" T ")); Serial.print((int)lround(tiltCur));
+    Serial.print(F(" C ")); Serial.print(panCenter); Serial.print(' '); Serial.print(tiltLevel);
+    Serial.print(F(" IDLE ")); Serial.println(idleLevel == HIGH ? 1 : 0);
     return;
   }
-
-  if (line == "?") {
-    int idle = (panRaw == targetPanRaw && tiltRaw == targetTiltRaw) ? 1 : 0;
-    Serial.print("STATE P ");
-    Serial.print(panDeg);
-    Serial.print(" T ");
-    Serial.print(tiltDeg);
-    Serial.print(" C ");
-    Serial.print(panCenterRaw);
-    Serial.print(" ");
-    Serial.print(tiltLevelRaw);
-    Serial.print(" IDLE ");
-    Serial.println(idle);
+  if (s[0] == 'P' && sscanf(s + 1, "%d %d", &a, &b) == 2) {
+    rawMode = false;
+    panTgt = constrain(a, PAN_MIN, PAN_MAX);
+    tiltTgt = constrain(b, TILT_MIN, TILT_MAX);
+    Serial.print(F("OK P ")); Serial.print(panTgt); Serial.print(F(" T ")); Serial.println(tiltTgt);
     return;
   }
-
-  int a = 0;
-  int b = 0;
-  if (sscanf(line.c_str(), "P %d %d", &a, &b) == 2) {
-    panDeg = clampi(a, PAN_MIN_DEG, PAN_MAX_DEG);
-    tiltDeg = clampi(b, TILT_MIN_DEG, TILT_MAX_DEG);
-    targetPanRaw = panToRaw(panDeg);
-    targetTiltRaw = tiltToRaw(tiltDeg);
-    Serial.print("OK P ");
-    Serial.print(panDeg);
-    Serial.print(" T ");
-    Serial.println(tiltDeg);
+  if (s[0] == 'R' && sscanf(s + 1, "%d %d", &a, &b) == 2) {
+    rawMode = true;
+    b = constrain(b, 0, 180);
+    if (a == 0) panServo.write(b); else tiltServo.write(b);
+    Serial.print(F("OK R ")); Serial.print(a); Serial.print(' '); Serial.println(b);
     return;
   }
-
-  if (sscanf(line.c_str(), "R %d %d", &a, &b) == 2) {
-    if (a != 0 && a != 1) {
-      Serial.println("ERR R");
-      return;
-    }
-    b = clampi(b, 0, 180);
-    applyImmediate(a, b);
-    Serial.print("OK R ");
-    Serial.print(a);
-    Serial.print(" ");
-    Serial.println(b);
+  if (s[0] == 'C' && sscanf(s + 1, "%d %d", &a, &b) == 2) {
+    panCenter = constrain(a, 0, 180);
+    tiltLevel = constrain(b, 0, 180);
+    Serial.print(F("OK C ")); Serial.print(panCenter); Serial.print(' '); Serial.println(tiltLevel);
     return;
   }
-
-  if (sscanf(line.c_str(), "C %d %d", &a, &b) == 2) {
-    panCenterRaw = clampi(a, 0, 180);
-    tiltLevelRaw = clampi(b, 0, 180);
-    targetPanRaw = panToRaw(panDeg);
-    targetTiltRaw = tiltToRaw(tiltDeg);
-    Serial.print("OK C ");
-    Serial.print(panCenterRaw);
-    Serial.print(" ");
-    Serial.println(tiltLevelRaw);
-    return;
-  }
-
-  Serial.println("ERR");
-}
-
-void pollSerial() {
-  while (Serial.available() > 0) {
-    char c = (char)Serial.read();
-    if (c == '\n' || c == '\r') {
-      if (lineBuf.length() > 0) {
-        handleLine(lineBuf);
-        lineBuf = "";
-      }
-    } else {
-      lineBuf += c;
-      if (lineBuf.length() > 64) {
-        lineBuf = "";
-      }
-    }
-  }
-}
-
-void slew() {
-  unsigned long now = millis();
-  if ((now - lastSlewMs) < SLEW_MS) return;
-  lastSlewMs = now;
-  if (panRaw < targetPanRaw) panRaw++;
-  else if (panRaw > targetPanRaw) panRaw--;
-  if (tiltRaw < targetTiltRaw) tiltRaw++;
-  else if (tiltRaw > targetTiltRaw) tiltRaw--;
-  panServo.write(panRaw);
-  tiltServo.write(tiltRaw);
-}
-
-void pollKnock() {
-  int level = digitalRead(PIN_KNOCK);
-  unsigned long now = millis();
-  if (level == HIGH && lastKnockLevel == LOW) {
-    if (knockCount == 0 || (now - lastKnockMs) >= KNOCK_SEP_MS) {
-      knockCount++;
-      lastKnockMs = now;
-    }
-  }
-  lastKnockLevel = level;
-  if (knockCount > 0 && (now - lastKnockMs) >= KNOCK_GROUP_MS) {
-    Serial.print("KNOCK ");
-    Serial.println(knockCount);
-    knockCount = 0;
-  }
+  Serial.print(F("ERR ")); Serial.println(s);
 }
 
 void setup() {
-  pinMode(PIN_KNOCK, INPUT);
-  panServo.attach(PIN_PAN);
-  tiltServo.attach(PIN_TILT);
-  panServo.write(panRaw);
-  tiltServo.write(tiltRaw);
   Serial.begin(115200);
-  while (!Serial) {
-    ;
-  }
-  Serial.println("HELLO HEIMDALL-SERVO 1");
+  pinMode(KNOCK_PIN, INPUT);
+  panServo.attach(PAN_PIN);
+  tiltServo.attach(TILT_PIN);
+  panServo.write(rawPan(0));
+  tiltServo.write(rawTilt(0));
+  // Learn the knock sensor's resting level (some SW-420 boards rest HIGH, some LOW).
+  // Keep the sensor still for the first 0.3 s after power-up.
+  int highs = 0;
+  for (int i = 0; i < 300; i++) { highs += digitalRead(KNOCK_PIN); delay(1); }
+  idleLevel = (highs > 150) ? HIGH : LOW;
+  Serial.println(F("HELLO HEIMDALL-SERVO 1"));
 }
 
 void loop() {
-  pollSerial();
-  slew();
-  pollKnock();
+  // 1. read command lines
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n') { buf[bufLen] = 0; handleLine(buf); bufLen = 0; }
+    else if (bufLen < sizeof(buf) - 1) buf[bufLen++] = c;
+  }
+  unsigned long now = millis();
+  // 2. smooth servo motion toward the target
+  if (!rawMode && now - lastStep >= STEP_MS) {
+    lastStep = now;
+    panCur = approach(panCur, panTgt);
+    tiltCur = approach(tiltCur, tiltTgt);
+    panServo.write(rawPan(panCur));
+    tiltServo.write(rawTilt(tiltCur));
+  }
+  // 3. knock detection: count separate hits, report the group when it ends
+  if (digitalRead(KNOCK_PIN) != idleLevel && now - lastHit > KNOCK_LOCKOUT_MS) {
+    lastHit = now;
+    hitCount++;
+  }
+  if (hitCount > 0 && now - lastHit > KNOCK_GROUP_MS) {
+    Serial.print(F("KNOCK ")); Serial.println(hitCount);
+    hitCount = 0;
+  }
 }

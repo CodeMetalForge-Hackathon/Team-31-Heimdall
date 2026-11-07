@@ -1,45 +1,8 @@
 #!/usr/bin/env bash
-# List USB serial, video, and audio devices on the station Pi.
-set -u
-
-echo "=== USB ==="
-if command -v lsusb >/dev/null 2>&1; then
-  lsusb
-else
-  echo "(lsusb not installed)"
-fi
-
-echo
-echo "=== serial ==="
-shopt -s nullglob
-serials=(/dev/ttyACM* /dev/ttyUSB*)
-if [ ${#serials[@]} -eq 0 ]; then
-  echo "(none)"
-else
-  ls -l "${serials[@]}"
-fi
-if [ -d /dev/serial/by-id ]; then
-  echo "-- by-id --"
-  ls -l /dev/serial/by-id
-fi
-
-echo
-echo "=== video ==="
-if command -v v4l2-ctl >/dev/null 2>&1; then
-  v4l2-ctl --list-devices || true
-else
-  videos=(/dev/video*)
-  if [ ${#videos[@]} -eq 0 ]; then
-    echo "(none)"
-  else
-    ls -l "${videos[@]}"
-  fi
-fi
-
-echo
-echo "=== audio ==="
-if command -v arecord >/dev/null 2>&1; then
-  arecord -l || true
-else
-  echo "(arecord not installed)"
-fi
+echo "== lsusb"; lsusb
+echo "== audio capture devices"; arecord -l
+echo "== video devices"; v4l2-ctl --list-devices 2>/dev/null || ls /dev/video*
+for d in /dev/video*; do echo "-- formats $d"; v4l2-ctl -d "$d" --list-formats-ext 2>/dev/null | head -20; done
+echo "== serial ports"; ls -l /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
+echo "== I2C bus 1"; i2cdetect -y 1 2>/dev/null
+echo "== SPI"; ls /dev/spidev* 2>/dev/null || echo "SPI off (sudo raspi-config nonint do_spi 0)"
