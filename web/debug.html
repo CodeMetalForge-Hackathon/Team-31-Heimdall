@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heimdall debug</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 12px; font: 14px/1.4 system-ui, sans-serif; background: #111; color: #ddd; }
+  h1 { font-size: 18px; margin: 0 0 8px; }
+  h2 { font-size: 14px; margin: 16px 0 6px; color: #9ab; text-transform: uppercase; letter-spacing: .05em; }
+  #conn { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .up { background: #1b5e20; } .down { background: #8b1a1a; }
+  #health span { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 6px; border-radius: 3px; background: #333; }
+  #health .ok { background: #1b5e20; } #health .error { background: #8b1a1a; } #health .off { background: #444; color: #999; }
+  img#thermal { width: 100%; max-width: 512px; image-rendering: pixelated; background: #000; display: block; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 3px 6px; border-bottom: 1px solid #333; white-space: nowrap; }
+  .tablewrap { overflow-x: auto; }
+  button { font-size: 16px; padding: 10px 16px; margin: 4px 6px 4px 0; border: 0; border-radius: 6px; background: #2d5f8a; color: #fff; }
+  button:active { background: #3d7fb8; }
+  #log { font: 12px/1.35 ui-monospace, Menlo, monospace; background: #000; padding: 6px; max-height: 50vh; overflow-y: auto; }
+  #log div { white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid #1a1a1a; }
+  #log b { color: #8cf; }
+  #pt { color: #9ab; }
+</style>
+</head>
+<body>
+<h1>Heimdall debug <span id="conn" class="down">connecting</span></h1>
+<div id="health"></div>
+
+<h2>Thermal</h2>
+<img id="thermal" src="/thermal.mjpg" alt="thermal stream">
+<div id="pt">pan-tilt: ?</div>
+<button id="left">Pan −30</button><button id="right">Pan +30</button><button id="auto">Auto</button>
+
+<h2>Victims</h2>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>id</th><th>status</th><th>deg</th><th>ppl</th><th>floor</th><th>min</th><th>motion</th><th>bat</th><th>hops</th><th>knock</th><th>snr</th><th>age</th></tr></thead>
+  <tbody id="victims"></tbody>
+</table>
+</div>
+
+<h2>Events (last 50)</h2>
+<div id="log"></div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const victims = {};
+let sock = null;
+let pan = 0, tilt = 0;
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  sock = new WebSocket(`${proto}//${location.host}/ws`);
+  sock.onopen = () => { $("conn").textContent = "live"; $("conn").className = "up"; };
+  sock.onclose = () => {
+    $("conn").textContent = "disconnected"; $("conn").className = "down";
+    setTimeout(connect, 1500);
+  };
+  sock.onmessage = (m) => {
+    let e;
+    try { e = JSON.parse(m.data); } catch (_) { return; }
+    handle(e);
+  };
+}
+
+function send(obj) {
+  if (sock && sock.readyState === WebSocket.OPEN) {
+    sock.send(JSON.stringify(obj));
+    logLine({ t: "SENT", ...obj });
+  }
+}
+
+function handle(e) {
+  logLine(e);
+  if (e.t === "victim") { victims[e.id] = e; renderVictims(); }
+  else if (e.t === "pantilt") {
+    pan = e.pan; tilt = e.tilt;
+    $("pt").textContent = `pan-tilt: pan ${e.pan}°  tilt ${e.tilt}°  mode ${e.mode}`;
+  }
+  else if (e.t === "health") {
+    $("health").innerHTML = Object.entries(e.modules || {})
+      .map(([k, v]) => `<span class="${esc(v)}">${esc(k)}: ${esc(v)}</span>`).join("");
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function logLine(e) {
+  const log = $("log");
+  const div = document.createElement("div");
+  const { t, ts, ...rest } = e;
+  const time = ts ? new Date(ts * 1000).toLocaleTimeString() : "";
+  div.innerHTML = `${esc(time)} <b>${esc(t)}</b> ${esc(JSON.stringify(rest))}`;
+  log.prepend(div);
+  while (log.children.length > 50) log.lastChild.remove();
+}
+
+function renderVictims() {
+  const now = Date.now() / 1000;
+  $("victims").innerHTML = Object.values(victims).sort((a, b) => a.id.localeCompare(b.id)).map((v) => `
+    <tr><td>${esc(v.id)}${v.hops ? " (via relay)" : ""}</td><td>${esc(v.status)}</td><td>${esc(v.deg)}</td>
+    <td>${esc(v.people)}</td><td>${v.floor == null ? "?" : esc(v.floor)}</td><td>${esc(v.minutes)}</td>
+    <td>${v.motion ? "yes" : "no"}</td><td>${esc(v.battery)}/3</td><td>${esc(v.hops)}</td>
+    <td>${v.knock ? "yes" : "no"}</td><td>${esc(v.snr_db)}</td><td>${Math.round(now - v.ts)}s</td></tr>`).join("");
+}
+
+$("left").onclick = () => send({ t: "pantilt_cmd", pan: Math.max(-90, Math.round(pan) - 30), tilt: Math.round(tilt) });
+$("right").onclick = () => send({ t: "pantilt_cmd", pan: Math.min(90, Math.round(pan) + 30), tilt: Math.round(tilt) });
+$("auto").onclick = () => send({ t: "pantilt_mode", mode: "auto" });
+setInterval(renderVictims, 1000);
+connect();
+</script>
+</body>
+</html>
