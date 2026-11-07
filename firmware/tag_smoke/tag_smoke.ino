@@ -153,8 +153,9 @@ static void IRAM_ATTR onAudioTimer() {
 }
 
 static bool attachHighPwm() {
-  // 8-bit: max carrier = 80 MHz / 256 = 312.5 kHz. Fall back if the core refuses.
-  const uint32_t tries[] = {312500, 250000, 156250};
+  // On the XIAO ESP32S3 (core 3.3.x) LEDC runs from the 40 MHz clock, so the
+  // highest 8-bit carrier is 40 MHz / 256 = 156.25 kHz (312.5/250 kHz fail).
+  const uint32_t tries[] = {156250, 78125};
   for (uint32_t f : tries) {
     if (ledcAttachChannel(PIN_SPK, f, 8, LEDC_CH)) { pwmFreq = f; return true; }
   }
