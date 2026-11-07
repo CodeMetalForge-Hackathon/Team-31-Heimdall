@@ -1,8 +1,8 @@
-# HEIMDALL SPEC v1 (shared contract)
+# HEIMDALL SPEC v1.1 (shared contract)
 
 Every part of Heimdall (Tag firmware in C++, phone web app in JS, Ear in Python, command post) must follow this file **exactly**. If something here is wrong or impossible, tell Namig. Don't silently change it in your own code.
 
-Owner: Namig. Version: v1, Sat Nov 7.
+Owner: Namig. Version: **v1.1**, Sat Nov 7, 17:30. Changes from v1 are marked **(v1.1)**: the motion window (1.3, 1.5), relay timing (1.6), receiver steps 5, 6 and 8 (1.7), `victim.confirmed` and the `thermal_det` box corner (section 3). The air format and the test vectors did not change.
 
 ---
 
@@ -43,7 +43,7 @@ Bytes 0..4 are a 40-bit big-endian integer `P`. Byte 5 is the CRC.
 | id | 16 | 39..24 | beacon ID, shown as 4 uppercase hex digits ("1A2B") |
 | floor | 5 | 23..19 | 0 = unknown; else floor = code − 2 (so −1 … 29) |
 | min2 | 6 | 18..13 | minutes since SOS ÷ 2, rounded down, capped at 63 (so 0 … 126 min) |
-| motion | 1 | 12 | 1 = moved in the last 60 s |
+| motion | 1 | 12 | 1 = moved in the last 60 s (normal mode) or 20 s (demo mode) **(v1.1)** |
 | status | 2 | 11..10 | 0 no_response, 1 ok, 2 injured, 3 critical |
 | people | 3 | 9..7 | 0 … 7 (7 means 7+) |
 | battery | 2 | 6..5 | 0 … 3 (quarters) |
@@ -63,10 +63,10 @@ Bytes 0..4 are a 40-bit big-endian integer `P`. Byte 5 is the CRC.
 Bit stream of vector 1: `000110100010101100100000111110010110000001100110`
 
 ### 1.5 When to transmit
-- Period: **8 s** in demo mode (default for the hackathon), 30 s in normal mode.
+- Period: **8 s** in demo mode (default for the hackathon), 30 s in normal mode. Demo mode also shortens the motion window to 20 s (1.3). **(v1.1)**
 - Add random jitter of ±1.0 s to every period, so two beacons don't collide forever.
 - Band for transmission number k (k = 0, 1, 2 …): `band = (k + id) % 4`.
-- **Burst mode** (for "head scan" testing): period 3 s, same band every time (band 1).
+- **Burst mode** (test only, e.g. direction calibration): period 3 s, same band every time (band 1).
 
 ### 1.6 Relay rule (phones only)
 A phone in victim mode with "relay" on:
@@ -74,6 +74,7 @@ A phone in victim mode with "relay" on:
 2. Has not relayed that id in the last 30 s.
 3. Waits a random 1.5 to 4.0 s. If it hears any preamble during that wait, it waits again (max 3 times, then drops it).
 4. Transmits the **same payload with hops + 1** (recompute the CRC) on band `(received band + 1) % 4`.
+5. Never plays two frames at once: if its own beacon is playing or due in the next 2.5 s, it sends the relay right after its own frame ends. A phone never decodes or relays its own id. **(v1.1)**
 
 The Ear keeps one record per id, prefers hops 0, and labels relayed records "via relay".
 
@@ -82,10 +83,10 @@ The Ear keeps one record per id, prefers hops 0, and labels relayed records "via
 2. Matched-filter against the preamble template for each band (FFT correlation).
 3. Detection: peak of |corr| divided by the median of |corr| over the last 2 s > **8.0**.
 4. The peak marks the preamble end. Symbol k starts at `t_end_preamble + 0.010 + k * 0.040`.
-5. For each symbol, compute the **non-coherent** correlation magnitude `|<analytic signal, complex template>|` with the up template and with the down template, searching ±1 ms around the expected start (no cumulative tracking needed: clocks are within 0.1%). Bigger one wins. Coherent (real-valued) correlation fails under reverb.
-6. Check the CRC. Drop frames with a bad CRC.
+5. For each symbol, compute the **non-coherent** correlation magnitude `|<analytic signal, complex template>|` with the up template and with the down template. Bigger one wins. Coherent (real-valued) correlation fails under reverb. **Track timing (v1.1):** a 0.1% clock error drifts about 1.9 ms by the last symbol, so fit the symbol timing as offset + drift over all 48 symbols, then search ±0.25 ms around that line. `modem/` does exactly this.
+6. Check the CRC and drop bad frames. Also drop frames whose 2 reserved bits aren't 0, or whose preamble correlation or symbol quality is weak (the gates in `modem/`). **Confirmation (v1.1):** even with these gates, about 1 in 1024 garbage decodes gets through, so a receiver treats a new id as **unconfirmed** until a second valid frame with the same id arrives within 60 s. The Ear publishes an unconfirmed victim with `"confirmed": false` and forgets it after 60 s if no second frame comes. Once confirmed, an id stays confirmed.
 7. Report: id, all fields, band, `snr_db = 20*log10(peak/median)`, time of arrival.
-8. **Direction (Ear):** GCC-PHAT on the 200 ms preamble between every mic pair, then a least-squares fit for the direction. Bearing convention below.
+8. **Direction (Ear):** GCC-PHAT between every mic pair, limited to the frame's band, on the 200 ms preamble or on the whole frame. **(v1.1)** At 16 kHz one sample is 2.1 cm of sound travel, so interpolate the correlation (upsample at least 16×) before reading delays. Then fit the bearing: try every angle from −180 to 180° in 1° steps, keep the one whose predicted pair delays score the highest summed correlation, and refine around it. Bearing convention below.
 
 ---
 
@@ -101,9 +102,12 @@ Every event has `"t"` (type) and `"ts"` (unix seconds, float).
 bearing     {"t":"bearing","ts":..,"deg":-35.0,"conf":0.82,"band":1,"snr_db":18.5,"src":"tag","id":"1A2B"}
               src "tag" = decoded beacon, "sound" = human sound from the classifier (id null), "scan" = head-scan result
 victim      {"t":"victim","ts":..,"id":"1A2B","floor":2,"minutes":14,"motion":true,"status":"injured",
-             "people":2,"battery":3,"hops":0,"knock":false,"deg":-35.0,"band":1,"snr_db":18.5}
+             "people":2,"battery":3,"hops":0,"knock":false,"deg":-35.0,"band":1,"snr_db":18.5,"confirmed":true}
+              confirmed (v1.1): false until a second frame with this id arrives (1.7 step 6); hide it after 60 s.
+              deg may be null (v1.1) when the Ear only knows this victim from a phone's "heard" report.
 thermal_det {"t":"thermal_det","ts":..,"pan_deg":-30.0,"max_c":34.1,
-             "hotspots":[{"x":0.41,"y":0.55,"w":0.12,"h":0.30,"temp_c":33.8,"deg":-32.5}]}   x,y,w,h normalized 0..1
+             "hotspots":[{"x":0.41,"y":0.55,"w":0.12,"h":0.30,"temp_c":33.8,"deg":-32.5}]}
+              x,y = TOP-LEFT corner of the box, w,h = its size, all normalized 0..1 to the thermal image (v1.1)
 pantilt     {"t":"pantilt","ts":..,"pan":-30.0,"tilt":10.0,"mode":"auto"}           mode auto|manual
 radar       {"t":"radar","ts":..,"presence":true,"breath_bpm":14.2,"heart_bpm":null,"dist_m":1.1,"src":"tinyrad"}
 knock       {"t":"knock","ts":..,"source":"sw420","count":3,"level_db":null}
