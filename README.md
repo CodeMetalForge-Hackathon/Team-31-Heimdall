@@ -93,6 +93,8 @@ Mount it flat on the mast with the **cable pointing to the back of the station**
 
 **Calibrate / test:** `ssh -t heimdall@heimdall 'bash ~/Team-31/ear/tools/audio/calibrate.sh'`. It walks you through phone positions: on `modem_test.html`, band 1, tap **Play burst** (every 3 s), press Enter at each spot, and it prints mean ± std + decode rate and saves `~/calib/*.wav`. For one spot: `python ear/tools/audio/doa_test.py --true 90`. Unit tests: `python -m pytest ear/tools/audio/test_doa.py`.
 - **Line of sight matters.** A laptop or a person between the phone and the puck made "behind" read as "front" in our tests (a reflection beats the blocked direct path). With a clear path, behind read −179°.
+- **Point the phone's speaker (its bottom edge) at the puck.** Facing away, the strongest sound at the puck was a wall reflection: left read −19° instead of −90°; pointed at the puck it read −99.7 ± 0.5.
+- Calibration at 2 m (true → mean ± std, decoded): 0 → +1.4 ± 0.4 (95%), +90 → +86.6 ± 0.9 (95%), +45 → +53.7 ± 1.0 (95%), 180 → about −177 (16%: quiet from behind), −90 → −99.7 ± 0.5 (95%). At 4 m: 0 → 4° off, +90 → +89.5 ± 1.5 (95%).
 
 **Relay demo switch:** on stage the station can hear the victim's phone directly, so to show a relay: `HEIMDALL_IGNORE_DIRECT=1A2B ear/tools/restart_ear.sh`. The station drops 1A2B's **hops-0** frames (one log line each) and shows the relayed copy as "1A2B (via relay)". Turn it off with a plain `ear/tools/restart_ear.sh`. Permanent version: `audio.ignore_direct_ids` in `ear/config.py`.
 
