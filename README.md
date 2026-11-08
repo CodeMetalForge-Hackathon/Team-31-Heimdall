@@ -59,9 +59,9 @@ On a laptop: `pip install fastapi "uvicorn[standard]" numpy opencv-python-headle
 ## Demo day
 **Start the demo** as the systemd service (survives SSH, restarts after a crash, and with `--boot` comes back by itself after a power cut: measured 51 s from plug-in to the first decoded frame, hotspot included):
 ```bash
-ear/tools/demo_up.sh --relay 1429 --bands 0,3 --acc 3 --boot
+ear/tools/demo_up.sh --relay AAAA --bands 0,3 --acc 3 --boot
 ```
-- `--relay <id>` is the relay demo switch: the station drops that id's direct (hops-0) frames, so its card only appears when phone C passes it on ("Via relay"). Use the Beacon ID at the top of phone A's page (the script says 1429; a reloaded page can show a new one).
+- `--relay <id>` is the relay demo switch: the station drops that id's direct (hops-0) frames, so its card only appears when phone C passes it on ("Via relay"). Whatever Beacon ID the top of phone A's page shows, that is the id after `--relay` (the script says AAAA; the id is kept in the phone's browser storage, so only another phone or a cleared browser gets a new one).
 - `--bands 0,3 --acc 3`: bearings from bands 0 and 3 only, summed over the last 3 frames of an id. Measured on demo morning: bands 1 and 2 put the Tag on the mirror side (−59° for +52°) about one frame in three, bands 0 and 3 never did. Other frames keep the id's last direction.
 - Modules default to `audio,pantilt,thermal`, never the mock (it would put fake data in front of the judges). `--modules audio` for sound only.
 - It prints the module health after 8 s and the phone/operator URLs. Settings go to `~/heimdall.env`, read by the unit.
@@ -69,7 +69,7 @@ ear/tools/demo_up.sh --relay 1429 --bands 0,3 --acc 3 --boot
 
 **Back to development runs:** `ear/tools/demo_up.sh --stop` (stops and disables the service), then `ear/tools/restart_ear.sh [modules]` as before. `restart_ear.sh` refuses to start while the service runs, so two Ears never fight over the mic array.
 
-**Relay-only phone (phone C):** `https://10.42.0.1:8443/victim.html?mode=relay`, tap **Start relay**. It listens and relays (two bands up, each id at most once per 30 s) and sends no beacon of its own, so it never shows up as a victim. A normal victim page only listens and relays while its own SOS is on.
+**Relay-only phone (phone C):** `https://10.42.0.1:8443/victim.html?mode=relay`, tap **Start relay**. It listens and relays (two bands up; a relay-only phone passes on every frame it hears, a normal victim page relays an id at most once per 30 s) and sends no beacon of its own, so it never shows up as a victim. A normal victim page only listens and relays while its own SOS is on.
 
 **Camera head calibration** (`pantilt` in `ear/config.py`, or per run `demo_up.sh --pan-dir -1 --pan-offset 30`): `pan_dir` is −1 when a positive servo pan turns the camera **left** (the servo mounted the other way round, as on the stage head), `pan_offset_deg` is the bearing the camera looks at with the servo centred (+30 on the stage head, measured 09:20 Sunday). Check it on the operator page: switch to Manual, pan to the Tag's bearing from its card, and the Tag's pile must sit in the middle of the thermal picture. Picture on the wrong side: flip `pan_dir`. Off by a constant: change the offset. Everything the Ear publishes (the dial, `pantilt` events, thermal boxes) stays in bearing degrees; only the number sent to the board changes. **Tape the camera to the servo horn**: every time it is turned by hand, the offset is wrong again.
 
@@ -80,7 +80,7 @@ ear/tools/demo_up.sh --relay 1429 --bands 0,3 --acc 3 --boot
 - The relay demo ignores one id's direct signal on purpose: the room is small enough for the station to hear everyone.
 - A relayed frame's direction is the relaying phone's, not the victim's. That is why phone C stands next to pile A: phone A's card then points at the right pile.
 - Each band reflects differently off the room. The kept bands are the ones that agreed with the tape marks on demo morning, so a new room means measuring again: the `frame ... raw bearing` lines in the log, two frames per band per pile, within 15° of the truth at both piles.
-- The camera pans ±90° from its zero; a victim further round than that gets the nearest edge. The thermal box's `deg` assumes the camera looks exactly where the head was sent, so it is only as good as the calibration above.
+- The camera pans ±90° around its zero: on the stage head (zero +30°) it reaches bearings −60° to +120°. A victim further round gets the edge, and the dial and the thermal boxes show that edge, not the victim's true direction. The thermal box's `deg` assumes the camera looks exactly where the head was sent, so it is only as good as the calibration above.
 - After a power cut the phones and the laptop may drift back to the venue Wi-Fi: turn auto-join off for every other network.
 
 ## Module contract

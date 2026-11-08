@@ -143,7 +143,7 @@
         p.due = now + this.wait();
         return true;
       });
-      if (counted) this.lastTc = tc;   // only a detection that restarted a wait starts the 0.8 s window
+      if (counted) this.lastTc = tc;   // a detection that restarted a wait opens the 0.8 s window; the ones inside it extend it
     }
 
     /** Relays whose wait is over: same fields with hops + 1, band (rx band + 2) % 4 (SPEC v1.2). */

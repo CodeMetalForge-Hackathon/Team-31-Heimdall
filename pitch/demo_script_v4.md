@@ -26,7 +26,7 @@ The operator page runs on the laptop, full screen on the projector (thermal, dir
 - [ ] **T-15 or earlier: the Tag on its power bank.** It starts beaconing by itself, status Injured. Mika holds it.
 - [ ] **Never press the Tag's SOS button after power-on:** one press turns its beacon off. Hold the Tag by the board edge, not the touch pad (a touch changes its status; it starts as Injured).
 - [ ] Before the run: check the Tag's 5V wire and speaker plug. Both came loose once.
-- [ ] **Phone A:** the plain victim page (no `?mode=relay` in the address), Beacon ID **AAAA** at the top, settings: **relay OFF**, status **Injured**. Tap SOS; the button must read SOS ACTIVE. Silent switch off, volume max. Propped up in pile A's opening, speaker toward the station.
+- [ ] **Phone A:** the plain victim page (no `?mode=relay` in the address), Beacon ID **AAAA** at the top, settings: **relay OFF**, status **Injured**. Tap SOS once; the button must read **SOS on** (small text: Tap to stop), the red rings pulse and the line under it says "Next chirp in … s". Do not tap it again: a second tap switches the SOS off. Silent switch off, volume max. Propped up in pile A's opening, speaker toward the station.
 - [ ] **Phone C:** open `https://10.42.0.1:8443/victim.html?mode=relay` and tap **Start relay**. The button then says Relaying. On its mark next to pile A.
 - [ ] Every phone: volume to max, iPhone silent switch **off**, Auto-Lock: Never, page open.
 - [ ] Every phone and the operator laptop: on the **HEIMDALL** Wi-Fi, with auto-join **off** for every other network (after a power cut they otherwise drift back to the venue Wi-Fi).
