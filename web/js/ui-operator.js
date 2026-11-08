@@ -13,6 +13,7 @@
   const STATUS_RANK = { critical: 0, injured: 1, no_response: 2, ok: 3 };
   const STATUS_LABEL = { critical: 'Critical', injured: 'Injured', no_response: 'No response', ok: 'OK' };
   const STOP_WINDOW_MS = 2 * 60 * 1000;
+  const UNCONF_HIDE_MS = 60 * 1000;
   const THERMAL_FOV = 55; // degrees, mock only
 
   const state = {
@@ -137,7 +138,8 @@
         at: useB ? b._at : rec.heardAt,
       };
     }
-    const b = state.bearings[state.bearings.length - 1];
+    // Auto mode never picks an unconfirmed beacon (SPEC v1.1): skip bearings from those ids.
+    const b = [...state.bearings].reverse().find((x) => !x.id || !state.victims.has(x.id) || state.victims.get(x.id).confirmed);
     if (!b) return null;
     const rec = b.id ? state.victims.get(b.id) : null;
     return {
@@ -151,7 +153,18 @@
     const arrow = $('dial-arrow');
     const hist = $('dial-hist');
     hist.innerHTML = '';
-    if (!t || t.deg === null || t.deg === undefined) {
+    if (t && (t.deg === null || t.deg === undefined)) {
+      // selected victim the station only knows from a phone's report (SPEC v1.1: deg null)
+      arrow.setAttribute('opacity', 0);
+      $('instr').className = 'instr idle';
+      $('instr').textContent = 'NO DIRECTION FIX';
+      $('instr-sub').textContent = 'reported by a phone · ' + ago(t.at);
+      $('instr-note').className = 'instr-note relay';
+      $('instr-note').textContent = 'Search near the phone that relayed it';
+      $('target-name').innerHTML = 'Selected · Beacon <b>' + esc(t.id) + '</b>';
+      return;
+    }
+    if (!t) {
       arrow.setAttribute('opacity', 0);
       $('instr').className = 'instr idle';
       $('instr').textContent = 'WAITING';
@@ -221,12 +234,19 @@
     if (e.motion === true) rec.stoppedAt = null;
     rec.v = e;
     rec.heardAt = now;
+    rec.confirmed = e.confirmed !== false; // SPEC v1.1: missing counts as confirmed
     renderQueue();
     renderDial();
   }
 
+  // Unconfirmed beacons disappear 60 s after their last event (SPEC v1.1).
+  const isVisible = (rec, now) => rec.confirmed || now - rec.heardAt <= UNCONF_HIDE_MS;
+
   function sortedVictims() {
-    return [...state.victims.values()].sort((a, b) => {
+    const now = Date.now();
+    if (state.selected && state.victims.has(state.selected) && !isVisible(state.victims.get(state.selected), now)) state.selected = null;
+    return [...state.victims.values()].filter((r) => isVisible(r, now)).sort((a, b) => {
+      if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1; // unconfirmed below every confirmed card
       const ra = STATUS_RANK[a.v.status] ?? 2, rb = STATUS_RANK[b.v.status] ?? 2;
       if (ra !== rb) return ra - rb;
       const ma = a.v.motion ? 1 : 0, mb = b.v.motion ? 1 : 0; // not moving first
@@ -250,17 +270,20 @@
     $('queue-count').textContent = list.length ? '(' + list.length + ')' : '';
     if (!list.length) { $('queue').innerHTML = '<div class="queue-empty">No victims heard yet.</div>'; return; }
     const now = Date.now();
-    $('queue').innerHTML = list.map(({ v, heardAt, stoppedAt }) => {
+    $('queue').innerHTML = list.map(({ v, heardAt, stoppedAt, confirmed }) => {
       const status = STATUS_RANK[v.status] !== undefined ? v.status : 'no_response';
       const stopped = stoppedAt && !v.motion && now - stoppedAt < STOP_WINDOW_MS;
       const people = Number(v.people) >= 7 ? '7+' : fmt(v.people);
       const floor = v.floor === null || v.floor === undefined ? 'floor ?' : 'floor ' + v.floor;
       const hops = Number(v.hops) || 0;
-      return '<button type="button" class="vcard bl-' + status + (stopped ? ' stopped' : '') + (state.selected === v.id ? ' sel' : '') + '" data-id="' + esc(v.id) + '">' +
+      const noFix = v.deg === null || v.deg === undefined;
+      return '<button type="button" class="vcard bl-' + status + (stopped ? ' stopped' : '') + (confirmed ? '' : ' unconf') + (state.selected === v.id ? ' sel' : '') + '" data-id="' + esc(v.id) + '">' +
         '<div class="vrow"><span class="vid">' + esc(v.id) + '</span>' +
           '<span class="chip s-' + status + '">' + STATUS_LABEL[status] + '</span>' +
+          (confirmed ? '' : '<span class="badge unconf">Unconfirmed</span>') +
           (stopped ? '<span class="badge stop">Stopped moving</span>' : '') +
-          '<span class="vbear">' + sideDeg(v.deg) + '</span></div>' +
+          '<span class="vbear">' + (noFix ? '' : sideDeg(v.deg)) + '</span></div>' +
+        (noFix ? '<div class="vrow vmeta nofix">direction: no fix (reported by a phone)</div>' : '') +
         '<div class="vrow vmeta"><span><b>' + people + '</b> ' + (people === '1' ? 'person' : 'people') + '</span><span>' + floor + '</span>' +
           '<span><b>' + fmt(v.minutes) + '</b> min since SOS</span>' +
           '<span class="moveicon" style="color:' + (v.motion ? 'var(--ok)' : 'var(--muted)') + '">' + (v.motion ? MOVE_ICON + 'moving' : STILL_ICON + 'still') + '</span>' +
@@ -282,9 +305,10 @@
     renderQueue();
     renderDial();
     const rec = state.victims.get(id);
+    if (!rec || rec.v.deg === null || rec.v.deg === undefined) return; // no direction fix: select only, don't aim
     const t = currentTarget();
-    const deg = t && t.deg !== null && t.deg !== undefined ? t.deg : rec && rec.v.deg;
-    if (deg !== null && deg !== undefined) emit({ t: 'pantilt_cmd', pan: Math.round(normDeg(deg) * 10) / 10, tilt: 0 });
+    const deg = t && t.deg !== null && t.deg !== undefined ? t.deg : rec.v.deg;
+    emit({ t: 'pantilt_cmd', pan: Math.round(normDeg(deg) * 10) / 10, tilt: 0 });
   });
 
   // ---------- sensors ----------
