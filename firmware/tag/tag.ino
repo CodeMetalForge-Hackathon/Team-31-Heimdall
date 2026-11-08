@@ -42,6 +42,12 @@ static const uint32_t MOTION_WINDOW_MS = 20000;  // SPEC 1.3 demo mode: "moved i
 static const float MOVE_G = 0.08f;               // | |a| - rest | > 0.08 g (0.8 m/s2, the phones' rule)
 static const float MOVE_DPS = 20.0f;             // or turning faster than 20 deg/s
 static const uint32_t QUIET_AFTER_MS = 300;      // ignore the IMU this long after our own sound or buzz
+// Tag A's Grove Speaker did not reproduce the sampled 8-bit PWM (TX + LED, but silent; a laptop recording
+// showed nothing). PWM_SQUARE plays each sample as full on / full off instead: a square wave at the chirp's
+// own frequency, like tone(). Decoded 20/20 on all 4 bands with modem/heimdall_ac1.py (simulation).
+static const bool PWM_SQUARE = true;
+#define IDLE_DUTY (PWM_SQUARE ? 0 : 128)
+#define PWM_SAMPLE(s) (PWM_SQUARE ? ((s) > 0.0f ? 255 : 0) : hac1::toPwm8(s))
 
 // ---------------- pins (same wiring as tag_smoke) ----------------
 static const uint8_t PIN_SPK = D0;     // Grove Speaker SIG (Plan A)
@@ -83,7 +89,7 @@ static void IRAM_ATTR onAudioTimer() {
     ledcWrite(PIN_SPK, txBuf[i]);
     playIdx = i + 1;
   } else if (playing) {
-    ledcWrite(PIN_SPK, 128);               // back to silence (50 % duty)
+    ledcWrite(PIN_SPK, IDLE_DUTY);         // back to silence
     playing = false;
   }
 }
@@ -92,7 +98,7 @@ static bool audioBegin() {
   // On this board LEDC runs from 40 MHz: 8-bit tops out at 156.25 kHz (tag_smoke, M1).
   bool ok = ledcAttachChannel(PIN_SPK, 156250, 8, 0) || ledcAttachChannel(PIN_SPK, 78125, 8, 0);
   if (!ok) return false;
-  ledcWrite(PIN_SPK, 128);
+  ledcWrite(PIN_SPK, IDLE_DUTY);
   audioTimer = timerBegin(hac1::FS);       // 16 kHz tick, exact (APB 80 MHz / 5000)
   timerAttachInterrupt(audioTimer, &onAudioTimer);
   timerAlarm(audioTimer, 1, true, 0);      // fire every tick, forever; idle ticks do nothing
@@ -100,7 +106,7 @@ static bool audioBegin() {
 }
 
 static void audioPlay(const uint8_t frame[6], int band) {
-  for (int i = 0; i < hac1::N_SAMPLES; i++) txBuf[i] = hac1::toPwm8(hac1::sample(frame, band, i));
+  for (int i = 0; i < hac1::N_SAMPLES; i++) txBuf[i] = PWM_SAMPLE(hac1::sample(frame, band, i));
   playIdx = 0;                             // the ISR starts on its next tick...
   playing = true;                          // ...and only the end of the frame clears this (index first: no race)
 }
