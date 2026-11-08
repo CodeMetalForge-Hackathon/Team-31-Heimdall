@@ -2,6 +2,7 @@
 import importlib
 import logging
 import pkgutil
+import signal
 import threading
 import time
 
@@ -82,10 +83,17 @@ class Supervisor:
             time.sleep(self.cfg["health_period_s"])
 
 
+def _stop(signum, frame):
+    # systemctl stop and restart_ear.sh send SIGTERM. Treat it like Ctrl-C so Python exits normally
+    # and the exit hooks run (pantilt points the head straight ahead).
+    raise KeyboardInterrupt
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname).1s %(name)s: %(message)s",
                         datefmt="%H:%M:%S")
     log.info("Heimdall Ear starting, modules: %s", ", ".join(CONFIG["modules"]) or "(none)")
+    signal.signal(signal.SIGTERM, _stop)
     bus = Bus()
     Supervisor(bus, CONFIG).start()
     try:

@@ -6,11 +6,14 @@
 - manual mode: follows pantilt_cmd from the operator page; pantilt_mode "auto" switches back.
 - publishes `pantilt` after every move and every 2 s, and `knock` for every KNOCK line
   (the SW-420 sits on the same board, and a serial port can only be opened once).
+- the head starts straight ahead and goes back there when the Ear stops, so a new run never
+  starts from wherever the last one left it.
 
 Standalone test (no audio needed):
   python -m ear.modules.pantilt          print what the board says, aim at nothing
   python -m ear.modules.pantilt --demo   fake bearings -45, 0, +45 every 3 s: the head should follow
 """
+import atexit
 import glob
 import logging
 import threading
@@ -31,6 +34,7 @@ DEFAULTS = {
 PAN_MIN, PAN_MAX = -90, 90
 TILT_MIN, TILT_MAX = -30, 25
 RANK = {"critical": 0, "injured": 1, "no_response": 2, "ok": 3}
+HOME = (0, 0)   # straight ahead and level, where the board puts the head on power-up
 
 
 def clamp(v, lo, hi):
@@ -129,7 +133,14 @@ def open_board(port, baud):
     return None
 
 
-_shared = {"aimer": None}   # one Aimer + one set of subscriptions, even if run() is restarted
+_shared = {"aimer": None, "park": None}   # one Aimer + one set of subscriptions, even if run() is restarted
+
+
+@atexit.register
+def _park_at_exit():
+    """The Ear is stopping (Ctrl-C, systemctl stop, restart_ear.sh): point the head straight ahead."""
+    if _shared["park"]:
+        _shared["park"]()
 
 
 def run(bus, cfg: dict) -> None:
@@ -146,12 +157,27 @@ def run(bus, cfg: dict) -> None:
         bus.subscribe("pantilt_cmd", aimer.on_cmd)
         bus.subscribe("pantilt_mode", aimer.on_mode)
 
-    state = {"error": None, "reset": False}
+    state = {"error": None, "reset": False, "parked": False}
     write_lock = threading.Lock()
 
     def send(cmd):
         with write_lock:
-            s.write((cmd + "\n").encode())
+            if not state["parked"]:        # once parked, nothing may move the head again
+                s.write((cmd + "\n").encode())
+
+    def park():
+        with write_lock:
+            if state["parked"]:
+                return
+            state["parked"] = True
+            try:
+                s.write(("P %d %d\n" % HOME).encode())
+                s.flush()                  # the board finishes the move after we're gone
+                log.info("parked: head straight (pan %d tilt %d)", *HOME)
+            except Exception:              # board already gone: nothing to park
+                pass
+
+    _shared["park"] = park
 
     def reader():
         try:
@@ -174,7 +200,9 @@ def run(bus, cfg: dict) -> None:
 
     threading.Thread(target=reader, daemon=True, name="pantilt-reader").start()
 
-    last_sent, last_move, last_status = None, 0.0, 0.0
+    send("P %d %d" % HOME)                 # start straight, not where the last run left the head
+    log.info("start: head straight (pan %d tilt %d)", *HOME)
+    last_sent, last_move, last_status = HOME, time.time(), 0.0
     try:
         while True:
             if state["error"] is not None:
@@ -202,6 +230,7 @@ def run(bus, cfg: dict) -> None:
                 last_status = now
             time.sleep(0.05)
     finally:
+        park()
         state["error"] = state["error"] or "stopped"
         s.close()
 
