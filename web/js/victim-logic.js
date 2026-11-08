@@ -104,9 +104,11 @@
 
   /** SPEC 1.6 relay decisions. Times in seconds on one clock (the page uses AudioContext time). */
   class RelayQueue {
-    constructor(myId, rand) {
+    constructor(myId, rand, holdoffS) {
       this.myId = myId;
       this.rand = rand || Math.random;
+      this.holdoffS = holdoffS === undefined ? SPEC.RELAY_HOLDOFF_S : holdoffS;   // 0 on a relay-only phone (SPEC v1.3)
+      this.lastTc = undefined;    // context time of the last detection that restarted a wait
       this.pending = [];          // {fields, band, waitStart, due, rewaits}
       this.lastRelayed = new Map(); // id -> time we last took it for transmission
       this.dropped = 0;
@@ -121,20 +123,27 @@
       if (!(fields.hops < SPEC.RELAY_MAX_HOPS)) return 'hops';
       if (this.pending.some((p) => p.fields.id === id)) return 'pending';
       const last = this.lastRelayed.get(id);
-      if (last !== undefined && now - last < SPEC.RELAY_HOLDOFF_S) return 'holdoff';
+      if (last !== undefined && now - last < this.holdoffS) return 'holdoff';
       this.pending.push({ fields: Object.assign({}, fields), band, waitStart: now, due: now + this.wait(), rewaits: 0 });
       return 'queued';
     }
 
     /** A preamble ending at time tc was heard (reported at `now`): everyone waiting since before it waits again. */
     preamble(tc, now) {
+      // One frame on the air gives several detections within about 0.7 s (its preamble, leakage into the next band,
+      // data symbols that look like one): a detection < 0.8 s after the last one that counted is the same frame,
+      // so it must not eat another of the 3 re-waits.
+      if (this.lastTc !== undefined && Math.abs(tc - this.lastTc) < 0.8) { this.lastTc = tc; return; }
+      let counted = false;
       this.pending = this.pending.filter((p) => {
         if (tc < p.waitStart || now >= p.due) return true;
+        counted = true;
         if (++p.rewaits > 3) { this.dropped++; return false; }
         p.waitStart = now;
         p.due = now + this.wait();
         return true;
       });
+      if (counted) this.lastTc = tc;   // only a detection that restarted a wait starts the 0.8 s window
     }
 
     /** Relays whose wait is over: same fields with hops + 1, band (rx band + 2) % 4 (SPEC v1.2). */
@@ -196,6 +205,7 @@
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const LISTEN = params.has('listen') ? params.get('listen') !== '0' : true;
   const RELAY_ONLY = params.get('mode') === 'relay';   // ?mode=relay: listen + relay, no beacon of our own (SPEC v1.3)
+  const STILL = RELAY_ONLY ? ' This phone relays nothing until its microphone works.' : ' Your SOS still plays.';
   const USE_SESSION = params.get('session') !== '0';
   const DEBUG = params.has('debug');
   const log = (...a) => console.log('[HEIMDALL victim]', ...a);
@@ -288,7 +298,9 @@
     S.startMs = Date.now();
     S.k = 0; S.sent = 0; S.lastBand = null;
     S.nextAt = RELAY_ONLY ? Infinity : c.currentTime + 0.15;   // relay only: our own beacon is never due
-    S.relay = new RelayQueue(vic.getSettings().id);
+    // a relay-only phone has no beacon of its own, so it passes on every frame it hears (no 30 s hold-off):
+    // phone A's card then gets a fresh direction every ~10 s instead of every 32-42 s
+    S.relay = new RelayQueue(vic.getSettings().id, undefined, RELAY_ONLY ? 0 : undefined);
     clearInterval(S.tick);
     S.tick = setInterval(tick, 250);
     tick();
@@ -354,7 +366,7 @@
     if (!LISTEN) { log('listening off (?listen=0)'); return; }
     if (S.listen) return;
     if (!root.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setErr('mic', 'To hear other phones, open the page from https://10.42.0.1:8443 . Your SOS still plays.');
+      setErr('mic', 'To hear other phones, open the page from https://10.42.0.1:8443 .' + STILL);
       return;
     }
     const pending = navigator.mediaDevices.getUserMedia({ audio: {
@@ -367,8 +379,8 @@
       log('mic failed', e);
       S.listen = null;
       setErr('mic', e && e.name === 'NotAllowedError'
-        ? 'Microphone blocked: this phone can\'t pass on other SOS calls. Your SOS still plays.'
-        : 'Microphone did not start (' + (e && e.message || e) + '). Your SOS still plays.');
+        ? 'Microphone blocked: this phone can\'t pass on other SOS calls.' + STILL
+        : 'Microphone did not start (' + (e && e.message || e) + ').' + STILL);
     });
   }
 

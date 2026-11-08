@@ -166,5 +166,28 @@ test('end to end: decode A, relay it as hop 1 two bands up, decode the relay', (
   assert.equal(rx2[0].band, r.band);
 });
 
+test('relay-only phone (holdoff 0) passes on every frame; a normal phone holds off 30 s', () => {
+  const c = new V.RelayQueue('C', () => 0, 0);
+  assert.equal(c.offer({ id: '1429', hops: 0 }, 0, 0), 'queued');
+  assert.equal(c.take(2).length, 1);
+  assert.equal(c.offer({ id: '1429', hops: 0 }, 1, 8), 'queued', 'no hold-off: the next frame is relayed too');
+  const n = new V.RelayQueue('B', () => 0);
+  assert.equal(n.offer({ id: '1429', hops: 0 }, 0, 0), 'queued');
+  n.take(2);
+  assert.equal(n.offer({ id: '1429', hops: 0 }, 1, 8), 'holdoff');
+});
+
+test('relay: the several detections of one frame restart the wait once, not three times', () => {
+  const q = new V.RelayQueue('1A2B', () => 0);
+  q.offer({ id: '77C1', hops: 0 }, 3, 10);          // due 11.5
+  q.preamble(10.6, 11.0);                          // the frame's preamble: new wait, due 12.5
+  assert.equal(q.pending[0].due, 12.5);
+  q.preamble(10.9, 11.3); q.preamble(11.2, 11.6);  // leakage and data symbols of the same frame: nothing
+  assert.equal(q.pending[0].rewaits, 1);
+  assert.equal(q.pending[0].due, 12.5);
+  q.preamble(12.1, 12.4);                          // a second frame: counts again
+  assert.equal(q.pending[0].rewaits, 2);
+});
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

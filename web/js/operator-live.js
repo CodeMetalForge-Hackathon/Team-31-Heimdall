@@ -17,6 +17,8 @@
 
   let sock = null;
   let attempt = 0;          // failed connects in a row, picks the backoff
+  let opens = 0;            // sockets opened so far: from the second one on, the MJPEG stream is restarted too
+  let openedAt = 0;         // when the current socket opened; only a socket that held 5 s earns a fresh backoff
   let retryTimer = null;
   let lastMsgAt = 0;
   const pending = new Map(); // command type -> {cmd, seq}, sent after reconnect
@@ -35,14 +37,16 @@
     s.onopen = () => {
       if (s !== sock) return;
       log('open');
-      lastMsgAt = Date.now();
+      lastMsgAt = openedAt = Date.now();
       op.setConnection('live');
+      if (opens++ > 0) op.setThermalSource(THERMAL + '?t=' + Date.now());   // the old MJPEG stream died with the link
       flushPending();
     };
     s.onmessage = (m) => {
       if (s !== sock) return;
       lastMsgAt = Date.now();
-      attempt = 0; // the station is talking: next drop starts the backoff from 0.5 s again
+      if (Date.now() - openedAt > 5000) attempt = 0; // held for 5 s: the next drop starts the backoff from 0.5 s again
+      // (not on the snapshot burst alone: a server that accepts and closes at once would otherwise get a connect every 0.6 s)
       let evt;
       try { evt = JSON.parse(m.data); } catch (e) { return; }
       op.handleEvent(evt);

@@ -25,6 +25,7 @@
     knockAt: null,
     cmdFns: [],
     aimDragging: false,
+    aimedByCard: false,   // the head is in Manual because a card was tapped: deselecting hands Auto back
   };
 
   // ---------- helpers ----------
@@ -148,7 +149,7 @@
   function currentTarget() {
     if (state.selected && state.victims.has(state.selected)) return victimTarget(state.selected, 'Selected');
     const now = Date.now();
-    const top = sortedVictims().find((r) => r.confirmed && r.v.deg !== null && r.v.deg !== undefined && now - r.heardAt <= 60000);
+    const top = sortedVictims().find((r) => r.confirmed && r.v.deg !== null && r.v.deg !== undefined && now - r.heardAt <= 90000);   // same window as the head (pantilt fresh_s)
     if (top) return victimTarget(top.v.id, 'Most urgent');
     // Auto mode never picks an unconfirmed beacon (SPEC v1.1): skip bearings from those ids.
     const b = [...state.bearings].reverse().find((x) => !x.id || !state.victims.has(x.id) || state.victims.get(x.id).confirmed);
@@ -242,6 +243,9 @@
     if (!e.id) return;
     const now = Date.now();
     let rec = state.victims.get(e.id);
+    if (rec && e.ts !== undefined && rec.v.ts === e.ts) {   // the snapshot after a reconnect: not a new report
+      rec.v = e; rec.confirmed = e.confirmed !== false; return;
+    }
     if (!rec) { rec = { v: e, heardAt: now, stoppedAt: null }; state.victims.set(e.id, rec); }
     const wasMoving = rec.v.motion;
     if (wasMoving === true && e.motion === false) rec.stoppedAt = now;
@@ -321,7 +325,11 @@
     const card = ev.target.closest('.vcard');
     if (!card) return;
     const id = card.dataset.id;
-    if (state.selected === id) { state.selected = null; renderQueue(); renderDial(); return; }
+    if (state.selected === id) {
+      state.selected = null;
+      if (state.aimedByCard) { state.aimedByCard = false; setMode('auto'); }   // tapped to look, tapped again: the head is free
+      renderQueue(); renderDial(); return;
+    }
     state.selected = id;
     renderQueue();
     renderDial();
@@ -330,6 +338,7 @@
     const t = currentTarget();
     const deg = t && t.deg !== null && t.deg !== undefined ? t.deg : rec.v.deg;
     emit({ t: 'pantilt_cmd', pan: Math.round(normDeg(deg) * 10) / 10, tilt: 0 });
+    state.aimedByCard = true;
   });
 
   // ---------- sensors ----------
@@ -382,12 +391,13 @@
 
   // ---------- thermal ----------
   const thermal = {
-    mode: null, raf: 0, cells: null, W: 32, H: 24,
+    mode: null, raf: 0, retry: 0, cells: null, W: 32, H: 24,
     mockCv: $('thermal-mock'), ovCv: $('thermal-overlay'), img: $('thermal-img'),
   };
 
   function setThermalSource(src) {
     cancelAnimationFrame(thermal.raf);
+    clearTimeout(thermal.retry);
     if (src === 'mock') {
       thermal.mode = 'mock';
       thermal.img.classList.add('hidden');
@@ -399,7 +409,12 @@
       thermal.mode = 'img';
       thermal.mockCv.classList.add('hidden');
       thermal.img.classList.remove('hidden');
-      thermal.img.onerror = () => { thermal.img.classList.add('hidden'); $('thermal-src').textContent = 'no thermal camera'; };
+      thermal.img.onload = () => { thermal.img.classList.remove('hidden'); };
+      thermal.img.onerror = () => {   // the stream broke (Ear restart, Wi-Fi): keep asking instead of going dark for good
+        thermal.img.classList.add('hidden'); $('thermal-src').textContent = 'no thermal camera, retrying';
+        clearTimeout(thermal.retry);
+        thermal.retry = setTimeout(() => { if (thermal.mode === 'img') thermal.img.src = src.split('?')[0] + '?t=' + Date.now(); }, 3000);
+      };
       thermal.img.src = src;
       $('thermal-src').textContent = 'waiting for camera';   // LIVE once thermal detections arrive
     }
@@ -482,7 +497,7 @@
 
   function onThermal(e) {
     state.thermal = e;
-    if (thermal.mode === 'img') $('thermal-src').textContent = 'LIVE';   // the thermal module is running
+    if (thermal.mode === 'img' && !thermal.img.classList.contains('hidden')) $('thermal-src').textContent = 'LIVE';   // picture really there
     $('thermal-max').textContent = e.max_c === null || e.max_c === undefined ? '' : 'max ' + fmt(e.max_c, 1) + ' °C';
     drawOverlay();
   }
