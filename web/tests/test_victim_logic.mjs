@@ -72,7 +72,7 @@ test('relay: own id, hops 3, holdoff 30 s, already pending', () => {
   assert.deepEqual(q.take(1.0), []);
   const out = q.take(1.5);
   assert.equal(out.length, 1);
-  assert.equal(out[0].fields.hops, 1); assert.equal(out[0].band, 3); assert.equal(out[0].rxBand, 2);
+  assert.equal(out[0].fields.hops, 1); assert.equal(out[0].band, 0); assert.equal(out[0].rxBand, 2);   // (2 + 2) % 4, SPEC v1.2
   assert.equal(q.offer(f, 2, 20), 'holdoff');
   assert.equal(q.offer(f, 2, 31.6), 'queued');
 });
@@ -117,6 +117,15 @@ test('echo window: decodes overlapping our own frame (+latency +150 ms) are igno
   assert.equal(V.overlapsOwn(7.0, 7.0 + F, booked, 0.1), false);
 });
 
+test('echo: only a decode that matches a frame we played (id, hops, band) is dropped', () => {
+  const F = V.FRAME_S;
+  const booked = [{ start: 10, end: 10 + F, id: '77C1', hops: 1, band: 0 }];   // our relay of 77C1
+  assert.equal(V.isOwnEcho({ id: '77C1', hops: 1, band: 0 }, 10.1, 10.1 + F, booked, 0.1), true);
+  assert.equal(V.isOwnEcho({ id: '77C1', hops: 0, band: 2 }, 10.1, 10.1 + F, booked, 0.1), false); // the original
+  assert.equal(V.isOwnEcho({ id: '5E09', hops: 0, band: 1 }, 10.5, 10.5 + F, booked, 0.1), false); // another phone
+  assert.equal(V.isOwnEcho({ id: '77C1', hops: 1, band: 0 }, 13.0, 13.0 + F, booked, 0.1), false); // too late
+});
+
 test('fall: free fall, impact, stillness -> fall; a hop or a shake is not', () => {
   const run = (samples) => {
     const d = new V.FallDetector();
@@ -138,7 +147,7 @@ test('fall: free fall, impact, stillness -> fall; a hop or a shake is not', () =
   assert.equal(run([...still(0, 500), ...ff(520, 400), [920, 40, true], ...moving]), null);
 });
 
-test('end to end: decode A, relay it as hop 1 on the next band, decode the relay', () => {
+test('end to end: decode A, relay it as hop 1 two bands up, decode the relay', () => {
   const fs = 16000;
   const A = { id: '77C1', floor: null, minutes: 60, motion: false, status: 'critical', people: 1, battery: 1, hops: 0, knock: true };
   const bandA = HM.bandFor(0, A.id);
@@ -149,7 +158,7 @@ test('end to end: decode A, relay it as hop 1 on the next band, decode the relay
   const q = new V.RelayQueue('1A2B', () => 0.5);
   assert.equal(q.offer(rx[0].fields, rx[0].band, 0), 'queued');
   const [r] = q.take(10);
-  assert.equal(r.band, (bandA + 1) % 4);
+  assert.equal(r.band, (bandA + 2) % 4);
   const dec2 = new HM.Decoder(48000);
   const rx2 = [...dec2.feed(new Float32Array(24000)), ...dec2.feed(HM.synth(HM.pack(r.fields), r.band, 48000)), ...dec2.flush()];
   assert.equal(rx2.length, 1);

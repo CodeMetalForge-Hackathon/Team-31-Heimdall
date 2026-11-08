@@ -63,6 +63,17 @@
     return false;
   }
 
+  /** Is a decoded frame the echo of one of our own transmissions? Same id, hops and band as a frame we
+   * played, overlapping it in time (+ latency + 150 ms). Frames of other phones that overlap ours are kept
+   * (N4: the time-only rule threw away 8 of 13 frames of a phone in step with us). */
+  function isOwnEcho(f, t0, t1, booked, latencyS) {
+    for (const b of booked) {
+      if (b.id !== f.id || b.hops !== f.hops || b.band !== f.band) continue;
+      if (t0 < b.end + latencyS + ECHO_MARGIN_S && t1 > b.start) return true;
+    }
+    return false;
+  }
+
   /** Earliest start >= t for a relay: never on top of a booked frame, never within 2.5 s
    * before our next beacon (then right after it ends) (SPEC 1.6.5). */
   function planRelay(t, booked, nextOwnAt) {
@@ -126,13 +137,13 @@
       });
     }
 
-    /** Relays whose wait is over: same fields with hops + 1, band (rx band + 1) % 4. */
+    /** Relays whose wait is over: same fields with hops + 1, band (rx band + 2) % 4 (SPEC v1.2). */
     take(now) {
       const out = [];
       this.pending = this.pending.filter((p) => {
         if (now < p.due) return true;
         this.lastRelayed.set(p.fields.id, now);
-        out.push({ fields: Object.assign({}, p.fields, { hops: p.fields.hops + 1 }), band: (p.band + 1) % 4, rxBand: p.band });
+        out.push({ fields: Object.assign({}, p.fields, { hops: p.fields.hops + 1 }), band: (p.band + 2) % 4, rxBand: p.band });
         return false;
       });
       return out;
@@ -172,7 +183,7 @@
   }
 
   const Logic = { periodS, motionWindowS, nextDelayS, batteryQuarter, levelToMeter, isMoving, buildFields,
-    overlapsOwn, planRelay, planOwn, RelayQueue, FallDetector, FRAME_S };
+    overlapsOwn, isOwnEcho, planRelay, planOwn, RelayQueue, FallDetector, FRAME_S };
   root.HeimdallVictimLogic = Logic;
   if (typeof module !== 'undefined' && module.exports) module.exports = Logic;
 
@@ -258,7 +269,7 @@
     src.connect(c.destination);
     at = Math.max(at, c.currentTime + 0.03);
     src.start(at);
-    S.booked.push({ start: at, end: at + FRAME_S, kind, src });
+    S.booked.push({ start: at, end: at + FRAME_S, kind, src, id: fields.id, hops: fields.hops, band });
     return at;
   }
 
@@ -423,7 +434,7 @@
     const f = d.f, s = vic.getSettings();
     S.stats.frames++;
     if (f.id === s.id) return;                                         // our own beacon, maybe relayed back
-    if (overlapsOwn(d.tc - SPEC.PREAMBLE_S, d.tc + FRAME_S - SPEC.PREAMBLE_S, S.booked, latencyS())) {
+    if (isOwnEcho(f, d.tc - SPEC.PREAMBLE_S, d.tc + FRAME_S - SPEC.PREAMBLE_S, S.booked, latencyS())) {
       S.stats.echo++;
       return;
     }
