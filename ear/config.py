@@ -41,6 +41,7 @@ CONFIG = {
         "report_hold_s": 90.0,       # a phone's heard report about an id we decoded this recently only refreshes its fields (SPEC v1.2)
         "doa_accumulate": 1,         # 1 = bearing from each frame alone; 4 = sum the last 4 frames' score curves per id
         "doa_accumulate_s": 40.0,    # ...but only frames from the last 40 s
+        "doa_bands": [0, 1, 2, 3],   # bands whose frames give a bearing; the others keep the last one (N7)
         "cpu_log_s": 30.0,           # how often to log the decoder CPU share
     },
     "lora": {"freq_mhz": 915.0},
@@ -60,3 +61,8 @@ if _env is not None:
 _env = os.environ.get("HEIMDALL_DOA_ACCUMULATE")
 if _env:
     CONFIG["audio"]["doa_accumulate"] = max(1, int(_env))
+
+# Bands that give bearings (N7): HEIMDALL_DOA_BANDS=1,2 ; empty = all four
+_env = os.environ.get("HEIMDALL_DOA_BANDS")
+if _env:
+    CONFIG["audio"]["doa_bands"] = [int(b) for b in _env.split(",") if b.strip()]

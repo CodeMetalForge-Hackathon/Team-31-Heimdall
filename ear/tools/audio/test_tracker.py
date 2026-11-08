@@ -58,3 +58,30 @@ def test_phone_report_about_an_unknown_id_is_published_with_deg_null():
     t, bus = make()
     ev = t.frame(fields("77C1"), None, 2, 12.0, 0.0, station=False)
     assert ev["deg"] is None and ev["confirmed"] is False and bus.events[-1]["id"] == "77C1"
+
+
+def test_frame_without_a_bearing_keeps_the_last_direction():
+    """N7 doa_bands: a frame on a band we don't take bearings from carries the last measured deg (up to 90 s)."""
+    t, _ = make()
+    t.frame(fields("1A2B"), -35.0, 1, 20.0, 0.0)
+    ev = t.frame(fields("1A2B"), None, 3, 20.0, 8.0)                    # band 3: no bearing
+    assert ev["deg"] == -35.0 and ev["band"] == 3
+    ev = t.frame(fields("1A2B"), None, 0, 20.0, 120.0)                  # 2 min later: too old to keep
+    assert ev["deg"] is None
+
+
+def test_relayed_frame_without_a_bearing_keeps_the_relay_direction():
+    t, _ = make()
+    t.frame(fields("A001", hops=1), 30.0, 1, 14.0, 0.0)
+    ev = t.frame(fields("A001", hops=1, motion=False), None, 3, 14.0, 40.0)
+    assert ev["deg"] == 30.0 and ev["hops"] == 1 and ev["motion"] is False
+
+
+def test_skipped_band_never_takes_the_direction_of_a_relayed_copy():
+    """Phone A heard directly (-35) and relayed by phone C (+35, C's own position). A's next direct frame on a
+    skipped band must keep -35, not swing the head to C's pile."""
+    t, _ = make()
+    t.frame(fields("1A2B"), -35.0, 1, 20.0, 0.0)
+    t.frame(fields("1A2B", hops=1), 35.0, 3, 15.0, 5.0)                # C's relay of A, inside direct_hold_s
+    ev = t.frame(fields("1A2B"), None, 3, 20.0, 8.0)                    # A direct on a skipped band
+    assert ev["deg"] == -35.0 and ev["hops"] == 0

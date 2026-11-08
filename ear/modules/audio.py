@@ -296,6 +296,12 @@ class Tracker:
             else:
                 if station:
                     r["station"] = now
+                    if deg is not None:
+                        r["deg"], r["deg_t"], r["deg_hops"] = deg, now, hops
+                    elif r.get("deg") is not None and r["deg_hops"] == hops and now - r["deg_t"] < self.report_hold_s:
+                        # this band gives no bearing (doa_bands): keep the last one we measured at the same hops.
+                        # Not from a relayed copy of a phone we hear directly: that's the relaying phone's direction.
+                        deg = r["deg"]
                 ev = {"t": "victim", **fields, "deg": deg, "band": band, "snr_db": round(snr_db, 1)}
                 if hops == 0 and station:
                     r["direct"] = now
@@ -358,6 +364,9 @@ def run(bus, cfg: dict, capture=None) -> None:
              f", ignoring direct frames from {sorted(ignore)}" if ignore else "")
 
     tracker = Tracker(bus, cfg)
+    doa_bands = {int(b) for b in cfg.get("doa_bands", (0, 1, 2, 3))}
+    if doa_bands != {0, 1, 2, 3}:
+        log.info("bearings only from bands %s (doa_bands); other frames keep the last direction", sorted(doa_bands))
     n_acc = int(cfg.get("doa_accumulate", 1))
     acc = BearingAccumulator(n_acc, float(cfg.get("doa_accumulate_s", 40.0))) if n_acc > 1 else None
     if acc:
@@ -388,7 +397,7 @@ def run(bus, cfg: dict, capture=None) -> None:
     def frames_out(frames, now):
         for fr in frames:
             handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs,
-                         doa_ok, now, beta, acc)
+                         doa_ok, now, beta, acc, doa_bands)
 
     with capture:
         while True:
@@ -438,14 +447,14 @@ def run(bus, cfg: dict, capture=None) -> None:
 
 
 def handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs, doa_ok,
-                 now, beta=PHAT_BETA, acc=None):
+                 now, beta=PHAT_BETA, acc=None, bands=None):
     f = fr.fields
     vid, hops = f["id"], f.get("hops", 0)
     if hops == 0 and vid in ignore:
         log.info("frame %s hops 0 dropped (ignore_direct_ids, relay demo)", vid)
         return
     deg = conf = raw = None
-    if doa_ok:
+    if doa_ok and (bands is None or fr.band in bands):
         start, stop = bearing_window(fr, fs, window)
         x = capture.ring.read(base + start, base + stop)
         if x is None:
