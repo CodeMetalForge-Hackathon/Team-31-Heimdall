@@ -352,7 +352,7 @@
       log('mic failed', e);
       S.listen = null;
       setErr('mic', e && e.name === 'NotAllowedError'
-        ? 'Allow the microphone for this page to hear other phones (Settings > Safari > Microphone on iPhone). Your SOS still plays.'
+        ? 'Microphone blocked: this phone can\'t pass on other SOS calls. Your SOS still plays.'
         : 'Microphone did not start (' + (e && e.message || e) + '). Your SOS still plays.');
     });
   }
@@ -478,7 +478,7 @@
       // iOS: must be called from the tap itself
       DeviceMotionEvent.requestPermission().then((r) => {
         if (r === 'granted') on();
-        else setErr('motion', 'Motion access is off, so the beacon cannot say if you move. Allow Motion & Orientation for this site.');
+        else setErr('motion', 'Motion is blocked, so rescuers won\'t see if you move. Allow Motion & Orientation for this site.');
       }).catch((e) => log('motion permission', e));
     } else on();
   }
