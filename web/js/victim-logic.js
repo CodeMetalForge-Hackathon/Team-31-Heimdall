@@ -448,7 +448,7 @@
     vic.logHeard(Object.assign({}, fields, { band: f.band, ts: Date.now() / 1000 }));
     log('heard', f.id, 'hops', f.hops, 'band', f.band, 'snr', f.snr_db);
     sendStation({ t: 'heard', id: f.id, fields, band: f.band, snr_db: f.snr_db, via: 'phone-' + s.id });
-    if (s.relay && S.relay) {
+    if ((s.relay || RELAY_ONLY) && S.relay) {   // a relay-only phone relays even if the Settings toggle is off
       const r = S.relay.offer(fields, f.band, S.ctx.currentTime);
       if (r !== 'queued') log('not relaying', f.id, r);
     }
