@@ -26,7 +26,8 @@ DEFAULTS = {
     "device": "auto",     # video index (e.g. 0) or "auto" = the first UVC camera that delivers frames
     "mode": "auto",       # "auto" | "split" | "gray"
     "hfov_deg": 56.0,     # horizontal field of view of the camera (256x192 phone thermal cams: ~56)
-    "flip_h": True,       # mirror left/right (check: move your hand right, the box must move right)
+    "flip_h": False,      # mirror left/right. Measured 2026-11-08 on the station camera: the raw picture is a true view
+                          # (pan right -> the scene moves left), so no flip. Check from BEHIND the camera: hand right, box right.
     "flip_v": False,
     "rotate": 0,          # 0, 90, 180, 270 (how the camera sits on the tilt plate)
     "fps": 9.0,           # JPEG frames per second for /thermal.mjpg
