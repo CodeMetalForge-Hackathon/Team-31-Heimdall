@@ -1,0 +1,7 @@
+# Lets demo_up.sh (and an agent over SSH) manage the Ear service without a password prompt.
+# Only these exact commands. Install once on the Pi (it asks for the password one last time):
+#   sudo visudo -cf ear/tools/heimdall.sudoers && sudo install -m 0440 ear/tools/heimdall.sudoers /etc/sudoers.d/heimdall
+heimdall ALL=(root) NOPASSWD: /usr/bin/systemctl restart heimdall, /usr/bin/systemctl start heimdall, \
+    /usr/bin/systemctl stop heimdall, /usr/bin/systemctl enable heimdall, /usr/bin/systemctl disable heimdall, \
+    /usr/bin/systemctl disable --now heimdall, /usr/bin/systemctl daemon-reload, \
+    /usr/bin/cp /home/heimdall/Team-31/ear/tools/heimdall.service /etc/systemd/system/heimdall.service

@@ -19,7 +19,7 @@
   const state = {
     victims: new Map(),   // id -> { v: lastVictimEvent, heardAt, stoppedAt, prevMotion }
     bearings: [],         // recent bearing events with local receive time `_at`
-    selected: null,       // victim id chosen by the user (null = follow latest signal)
+    selected: null,       // victim id chosen by the user (null = follow the most urgent victim, like the head)
     pantilt: { pan: 0, tilt: 0, mode: 'auto' },
     thermal: null,        // last thermal_det
     knockAt: null,
@@ -55,17 +55,19 @@
     const el = $('conn');
     const ok = ['connecting', 'live', 'lost', 'mock'].includes(s) ? s : 'connecting';
     el.className = 'pill ' + ok;
-    el.textContent = ok;
+    el.textContent = { connecting: 'Connecting', live: 'Live', lost: 'Offline', mock: 'Demo data' }[ok];
   }
 
   const POINTS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   function onHeading(e) {
+    $('compass').classList.remove('hidden');
     const yaw = ((Number(e.yaw_deg) % 360) + 360) % 360;
     $('compass-text').textContent = Math.round(yaw) + '° ' + POINTS[Math.round(yaw / 45) % 8];
     $('compass-needle').setAttribute('transform', 'rotate(' + (-yaw) + ')'); // needle points to north
   }
 
   function onDrone(e) {
+    $('drone').classList.remove('hidden');
     const note = e.note || e.link || '—';
     const el = $('drone');
     el.innerHTML = 'Drone: <b>' + esc(note) + '</b>';
@@ -93,6 +95,7 @@
   function onPantilt(e) {
     state.pantilt = { pan: Number(e.pan) || 0, tilt: Number(e.tilt) || 0, mode: e.mode || state.pantilt.mode };
     setModeUI(state.pantilt.mode);
+    showCard('sc-cam');
     $('thermal-pt').textContent = 'pan ' + fmt(state.pantilt.pan) + '° · tilt ' + fmt(state.pantilt.tilt) + '°';
     $('cam-big').textContent = state.pantilt.mode.toUpperCase();
     $('cam-line').innerHTML = 'pan <b>' + sideDeg(state.pantilt.pan) + '</b> · tilt <b>' + fmt(state.pantilt.tilt) + '°</b>';
@@ -120,30 +123,39 @@
     }
   })();
 
-  // Which signal does the dial point at? The selected victim, or else the newest bearing.
+  // Which signal does the dial point at? The victim the user selected; else the most urgent confirmed victim
+  // with a direction (top of the triage queue, the same pick as the camera head in AUTO); else the newest bearing.
+  // (On stage the Tag only arrives as relays, which make no bearing events: following the newest bearing kept
+  // the arrow on Victim A while the head swung to the Tag.)
+  function victimTarget(id, label) {
+    const rec = state.victims.get(id);
+    const b = [...state.bearings].reverse().find((x) => x.id === id);
+    const useB = b && b._at >= rec.heardAt - 2000; // the bearing of the same frame lands just before its victim event
+    return {
+      key: id,
+      id,
+      label,
+      deg: useB ? b.deg : rec.v.deg,
+      conf: useB ? b.conf : 0.7,
+      band: useB ? b.band : rec.v.band,
+      snr: useB ? b.snr_db : rec.v.snr_db,
+      src: 'tag',
+      hops: rec.v.hops || 0,
+      at: useB ? Math.max(b._at, rec.heardAt) : rec.heardAt,
+    };
+  }
+
   function currentTarget() {
-    if (state.selected && state.victims.has(state.selected)) {
-      const rec = state.victims.get(state.selected);
-      const b = [...state.bearings].reverse().find((x) => x.id === state.selected);
-      const useB = b && b._at >= rec.heardAt;
-      return {
-        key: state.selected,
-        id: state.selected,
-        deg: useB ? b.deg : rec.v.deg,
-        conf: useB ? b.conf : 0.7,
-        band: useB ? b.band : rec.v.band,
-        snr: useB ? b.snr_db : rec.v.snr_db,
-        src: 'tag',
-        hops: rec.v.hops || 0,
-        at: useB ? b._at : rec.heardAt,
-      };
-    }
+    if (state.selected && state.victims.has(state.selected)) return victimTarget(state.selected, 'Selected');
+    const now = Date.now();
+    const top = sortedVictims().find((r) => r.confirmed && r.v.deg !== null && r.v.deg !== undefined && now - r.heardAt <= 60000);
+    if (top) return victimTarget(top.v.id, 'Most urgent');
     // Auto mode never picks an unconfirmed beacon (SPEC v1.1): skip bearings from those ids.
     const b = [...state.bearings].reverse().find((x) => !x.id || !state.victims.has(x.id) || state.victims.get(x.id).confirmed);
     if (!b) return null;
     const rec = b.id ? state.victims.get(b.id) : null;
     return {
-      key: b.id || b.src, id: b.id, deg: b.deg, conf: b.conf, band: b.band, snr: b.snr_db,
+      key: b.id || b.src, id: b.id, label: 'Latest signal', deg: b.deg, conf: b.conf, band: b.band, snr: b.snr_db,
       src: b.src, hops: rec ? rec.v.hops || 0 : 0, at: b._at,
     };
   }
@@ -156,19 +168,21 @@
     if (t && (t.deg === null || t.deg === undefined)) {
       // selected victim the station only knows from a phone's report (SPEC v1.1: deg null)
       arrow.setAttribute('opacity', 0);
+      $('navbar').classList.add('idle');
       $('instr').className = 'instr idle';
-      $('instr').textContent = 'NO DIRECTION FIX';
-      $('instr-sub').textContent = 'reported by a phone · ' + ago(t.at);
-      $('instr-note').className = 'instr-note relay';
-      $('instr-note').textContent = 'Search near the phone that relayed it';
-      $('target-name').innerHTML = 'Selected · Beacon <b>' + esc(t.id) + '</b>';
+      $('instr').textContent = 'No direction';
+      $('instr-sub').textContent = '';
+      $('instr-note').className = 'instr-note muted';
+      $('instr-note').textContent = 'Heard by a phone: search near it';
+      $('target-name').innerHTML = '<b>' + esc(t.id) + '</b> · ' + esc((t.label || 'Selected').toLowerCase());
       return;
     }
     if (!t) {
       arrow.setAttribute('opacity', 0);
+      $('navbar').classList.add('idle');
       $('instr').className = 'instr idle';
-      $('instr').textContent = 'WAITING';
-      $('instr-sub').innerHTML = '&nbsp;';
+      $('instr').textContent = 'Listening';
+      $('instr-sub').textContent = '';
       $('instr-note').textContent = '';
       $('target-name').textContent = 'No signal yet';
       return;
@@ -178,6 +192,8 @@
     const stale = ageS > 30;
     const conf = Math.max(0, Math.min(1, Number(t.conf) || 0));
     arrow.setAttribute('transform', 'rotate(' + deg + ')');
+    const tv = t.id && state.victims.get(t.id);
+    arrow.setAttribute('class', tv ? 'st-' + tv.v.status : '');
     arrow.setAttribute('opacity', (0.25 + 0.75 * conf) * (stale ? 0.4 : 1));
 
     // last 10 bearings of the same target, as faded dots
@@ -192,28 +208,26 @@
     });
 
     const a = Math.abs(deg);
-    let text;
-    if (a < 10) text = 'AHEAD';
-    else if (a > 150) text = 'TURN AROUND';
-    else text = (deg > 0 ? 'TURN RIGHT ' : 'TURN LEFT ') + Math.round(a) + '°';
+    let html;
+    if (a < 10) html = '<span class="ideg">Ahead</span>';
+    else if (a > 150) html = '<span class="ideg">Behind</span>';
+    else html = '<span class="ideg">' + Math.round(a) + '°</span><span class="iword">' + (deg > 0 ? 'right' : 'left') + '</span>';
     $('instr').className = 'instr';
-    $('instr').textContent = text;
+    $('instr').innerHTML = html;
+    $('navbar').classList.remove('idle');
+    $('mnv').style.transform = 'rotate(' + deg + 'deg)';
 
-    const parts = [];
-    if (t.snr !== null && t.snr !== undefined) parts.push('signal ' + fmt(t.snr) + ' dB');
-    if (t.band !== null && t.band !== undefined) parts.push('band ' + t.band);
-    parts.push('conf ' + Math.round(conf * 100) + '%');
-    parts.push(stale ? 'last ' + ago(t.at) : ago(t.at));
-    $('instr-sub').textContent = parts.join(' · ');
+    // say only what's unusual: an old fix or a weak one
+    $('instr-sub').textContent = stale ? 'last heard ' + ago(t.at) : conf < 0.35 ? 'weak signal' : '';
 
     const note = $('instr-note');
     if (t.src === 'sound') { note.className = 'instr-note muted'; note.textContent = 'Unknown human sound'; }
-    else if (t.src === 'scan') { note.className = 'instr-note muted'; note.textContent = 'Head-scan result'; }
-    else if (t.hops > 0) { note.className = 'instr-note relay'; note.textContent = 'via relay: direction points to the relaying phone'; }
+    else if (t.src === 'scan') { note.className = 'instr-note muted'; note.textContent = 'Head scan'; }
+    else if (t.hops > 0) { note.className = 'instr-note relay'; note.textContent = 'Via relay'; }
     else { note.className = 'instr-note'; note.textContent = ''; }
 
-    const who = t.id ? 'Beacon <b>' + esc(t.id) + '</b>' : t.src === 'sound' ? 'Unknown sound' : 'Scan';
-    $('target-name').innerHTML = (state.selected ? 'Selected · ' : 'Latest signal · ') + who;
+    const who = t.id ? '<b>' + esc(t.id) + '</b>' : t.src === 'sound' ? '<b>Unknown sound</b>' : '<b>Scan</b>';
+    $('target-name').innerHTML = who + ' · ' + esc((t.label || 'Latest signal').toLowerCase());
   }
 
   function onBearing(e) {
@@ -267,8 +281,8 @@
 
   function renderQueue() {
     const list = sortedVictims();
-    $('queue-count').textContent = list.length ? '(' + list.length + ')' : '';
-    if (!list.length) { $('queue').innerHTML = '<div class="queue-empty">No victims heard yet.</div>'; return; }
+    $('queue-count').textContent = list.length ? String(list.length) : '';
+    if (!list.length) { $('queue').innerHTML = '<div class="queue-empty">Nobody heard yet.</div>'; return; }
     const now = Date.now();
     $('queue').innerHTML = list.map(({ v, heardAt, stoppedAt, confirmed }) => {
       const status = STATUS_RANK[v.status] !== undefined ? v.status : 'no_response';
@@ -277,21 +291,26 @@
       const floor = v.floor === null || v.floor === undefined ? 'floor ?' : 'floor ' + v.floor;
       const hops = Number(v.hops) || 0;
       const noFix = v.deg === null || v.deg === undefined;
+      // one line of facts, tags only for what needs attention (Maps-style list row)
+      const sub = [STATUS_LABEL[status], v.motion ? 'moving' : 'still', fmt(v.minutes) + ' min'];
+      if (Number(v.people) > 1) sub.push(people + ' people');
+      if (v.floor !== null && v.floor !== undefined) sub.push('floor ' + v.floor);
+      if (now - heardAt > 20000) sub.push(ago(heardAt));
+      const tags = [];
+      if (stopped) tags.push('<span class="tag stop">Stopped moving</span>');
+      if (hops > 0) tags.push('<span class="tag relay">Via ' + (hops > 1 ? hops + ' relays' : 'relay') + '</span>');
+      if (v.knock) tags.push('<span class="tag knock">Heard knock</span>');
+      if (noFix) tags.push('<span class="tag nofix">No direction</span>');
+      if (!confirmed) tags.push('<span class="tag unconf">Unconfirmed</span>');
+      if (Number(v.battery) <= 0) tags.push('<span class="tag batt">Battery low</span>');
+      const glyph = { critical: '!', injured: '+', no_response: '?', ok: '✓' }[status];
       return '<button type="button" class="vcard bl-' + status + (stopped ? ' stopped' : '') + (confirmed ? '' : ' unconf') + (state.selected === v.id ? ' sel' : '') + '" data-id="' + esc(v.id) + '">' +
-        '<div class="vrow"><span class="vid">' + esc(v.id) + '</span>' +
-          '<span class="chip s-' + status + '">' + STATUS_LABEL[status] + '</span>' +
-          (confirmed ? '' : '<span class="badge unconf">Unconfirmed</span>') +
-          (stopped ? '<span class="badge stop">Stopped moving</span>' : '') +
-          '<span class="vbear">' + (noFix ? '' : sideDeg(v.deg)) + '</span></div>' +
-        (noFix ? '<div class="vrow vmeta nofix">direction: no fix (reported by a phone)</div>' : '') +
-        '<div class="vrow vmeta"><span><b>' + people + '</b> ' + (people === '1' ? 'person' : 'people') + '</span><span>' + floor + '</span>' +
-          '<span><b>' + fmt(v.minutes) + '</b> min since SOS</span>' +
-          '<span class="moveicon" style="color:' + (v.motion ? 'var(--ok)' : 'var(--muted)') + '">' + (v.motion ? MOVE_ICON + 'moving' : STILL_ICON + 'still') + '</span>' +
-          batteryHTML(v.battery) + '</div>' +
-        '<div class="vrow vmeta">' +
-          (hops > 0 ? '<span class="badge relay">via ' + hops + ' relay' + (hops > 1 ? 's' : '') + '</span>' : '') +
-          (v.knock ? '<span class="badge knock">heard knock</span>' : '') +
-          '<span>last heard ' + ago(heardAt) + '</span></div>' +
+        '<span class="vglyph g-' + status + '" aria-hidden="true">' + glyph + '</span>' +
+        '<span class="vbody"><span class="vtitle"><span class="vid">' + esc(v.id) + '</span></span>' +
+          '<span class="vsub">' + esc(sub.join(' · ')) + '</span>' +
+          (tags.length ? '<span class="vtags">' + tags.join('') + '</span>' : '') + '</span>' +
+        '<span class="vtrail">' + (noFix ? '' : '<svg class="vdir" viewBox="-6 -6 12 12" aria-hidden="true" style="transform:rotate(' + normDeg(v.deg) + 'deg)"><path d="M0 -5.5 L4.2 3.8 L0 1.6 L-4.2 3.8 Z"/></svg>' +
+          '<span class="vbear">' + sideDeg(v.deg) + '</span>') + '</span>' +
         '</button>';
     }).join('');
   }
@@ -312,13 +331,20 @@
   });
 
   // ---------- sensors ----------
+  // A card appears with its first event, so nothing that isn't running sits on the big screen as "no data".
+  function showCard(id) {
+    $(id).classList.remove('hidden');
+    $('sensors-panel').classList.remove('hidden');
+  }
   function onRadar(e) {
+    showCard('sc-radar');
     $('radar-pres').textContent = e.presence === true ? 'PRESENCE' : e.presence === false ? 'none' : '—';
     $('radar-pres').style.color = e.presence ? 'var(--ok)' : '';
     $('radar-line').innerHTML = 'breath <b>' + fmt(e.breath_bpm, 1) + '</b>/min · heart <b>' + fmt(e.heart_bpm) + '</b>/min<br>' +
       'dist <b>' + fmt(e.dist_m, 1) + ' m</b> · ' + esc(e.src || '—');
   }
   function onKnock(e) {
+    showCard('sc-knock');
     state.knockAt = Date.now();
     state.knockEvt = e;
     renderKnock();
@@ -327,13 +353,15 @@
     const e = state.knockEvt;
     if (!e) return;
     $('knock-big').textContent = (e.count ?? '—') + ' knock' + (e.count === 1 ? '' : 's');
-    $('knock-line').innerHTML = '<b>' + ago(state.knockAt) + '</b> · ' + esc(e.source || '—') + (e.level_db !== null && e.level_db !== undefined ? ' · ' + fmt(e.level_db) + ' dB' : '');
+    $('knock-line').textContent = ago(state.knockAt);
   }
   function onSound(e) {
+    showCard('sc-sound');
     $('sound-big').textContent = e.label || '—';
     $('sound-line').innerHTML = 'score <b>' + fmt(e.score, 2) + '</b> · dir <b>' + sideDeg(e.deg) + '</b>';
   }
   function onNoise(e) {
+    showCard('sc-noise');
     const bars = $('noise-bars').querySelectorAll('i');
     const vals = Array.isArray(e.band_db) ? e.band_db : [];
     bars.forEach((b, i) => {
@@ -342,9 +370,10 @@
       const pct = v === null || v === undefined ? 0 : Math.max(4, Math.min(100, ((v + 90) / 60) * 100));
       b.style.height = pct + '%';
     });
-    $('noise-line').innerHTML = (e.quiet ? '<span class="badge knock quiet-badge">Quiet window</span>' : 'bands 0–3 · ' + vals.map((v) => fmt(v)).join(' / ') + ' dB');
+    $('noise-line').innerHTML = e.quiet ? '<span class="badge knock quiet-badge">Quiet</span>' : '';
   }
   function onLora(e) {
+    showCard('sc-lora');
     $('lora-big').textContent = (e.tx ?? '—') + ' sent';
     $('lora-line').innerHTML = 'last packet <b style="color:' + (e.last_ok ? 'var(--ok)' : 'var(--critical)') + '">' + (e.last_ok ? 'ok' : 'failed') + '</b>';
   }
@@ -368,8 +397,9 @@
       thermal.mode = 'img';
       thermal.mockCv.classList.add('hidden');
       thermal.img.classList.remove('hidden');
+      thermal.img.onerror = () => { thermal.img.classList.add('hidden'); $('thermal-src').textContent = 'no thermal camera'; };
       thermal.img.src = src;
-      $('thermal-src').textContent = 'LIVE';
+      $('thermal-src').textContent = 'waiting for camera';   // LIVE once thermal detections arrive
     }
   }
 
@@ -450,6 +480,7 @@
 
   function onThermal(e) {
     state.thermal = e;
+    if (thermal.mode === 'img') $('thermal-src').textContent = 'LIVE';   // the thermal module is running
     $('thermal-max').textContent = 'max ' + fmt(e.max_c, 1) + ' °C';
     drawOverlay();
   }

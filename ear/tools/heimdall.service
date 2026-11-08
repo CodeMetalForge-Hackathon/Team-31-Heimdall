@@ -1,4 +1,5 @@
-# Heimdall Ear. Install (don't enable until demo day):
+# Heimdall Ear. Easiest: ear/tools/demo_up.sh [--relay A001] [--boot] installs, configures and starts it.
+# By hand (don't enable until demo day):
 #   sudo cp ~/Team-31/ear/tools/heimdall.service /etc/systemd/system/ && sudo systemctl daemon-reload
 #   sudo systemctl start heimdall      # run now
 #   sudo systemctl enable heimdall     # start on boot (later)
@@ -14,7 +15,8 @@ Group=heimdall
 SupplementaryGroups=i2c spi gpio dialout video audio plugdev
 WorkingDirectory=/home/heimdall/Team-31
 Environment=PYTHONUNBUFFERED=1
-# Environment=HEIMDALL_MODULES=mock
+# Settings: ~/heimdall.env (written by ear/tools/demo_up.sh): HEIMDALL_MODULES, HEIMDALL_IGNORE_DIRECT, HEIMDALL_DOA_ACCUMULATE
+EnvironmentFile=-/home/heimdall/heimdall.env
 ExecStart=/home/heimdall/heimdall-venv/bin/python -m ear.main
 Restart=always
 RestartSec=3

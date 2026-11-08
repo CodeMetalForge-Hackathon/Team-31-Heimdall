@@ -165,13 +165,14 @@ def pair_distances(xy):
     return {(i, j): float(np.hypot(*(xy[i] - xy[j]))) for i in range(n) for j in range(i + 1, n)}
 
 
-def estimate_bearing(x4, band, fs, mic_xy, c=343.0, offset_deg=0.0, upsample=UPSAMPLE, beta=PHAT_BETA):
+def estimate_bearing(x4, band, fs, mic_xy, c=343.0, offset_deg=0.0, upsample=UPSAMPLE, beta=PHAT_BETA, curve=False):
     """GCC-PHAT bearing of a source in `band` from raw mic signals.
 
     x4: (n_samples, n_mics), columns in the same order as the rows of mic_xy ((n_mics, 2), meters).
     beta: PHAT exponent (1 = full PHAT). 0.7 picked from the 2 m / 4 m calibration recordings: full
     whitening lets reverb pick a neighbouring cycle of the ~3 kHz carrier on some pairs.
-    -> (deg, conf): bearing clockwise from +x (SPEC 2) in -180..180, conf 0..1."""
+    -> (deg, conf): bearing clockwise from +x (SPEC 2) in -180..180, conf 0..1.
+    curve=True -> (deg, conf, score): score = the coarse curve on COARSE_DEG (no offset), scaled so median 0, max 1."""
     x = np.asarray(x4, dtype=np.float64)
     p = np.asarray(mic_xy, dtype=np.float64)
     n, m = x.shape
@@ -211,7 +212,31 @@ def estimate_bearing(x4, band, fs, mic_xy, c=343.0, offset_deg=0.0, upsample=UPS
     hi, lo, med = float(sc.max()), float(sc.min()), float(np.median(sc))
     conf = min(1.0, max(0.0, (hi - med) / (hi - lo + 1e-9)))
     deg = (deg + offset_deg + 180.0) % 360.0 - 180.0
+    if curve:
+        return round(deg, 1), round(conf, 2), (sc - med) / (hi - med + 1e-9)
     return round(deg, 1), round(conf, 2)
+
+
+COARSE_DEG = np.arange(-180.0, 180.0, 1.0)      # the grid of estimate_bearing's coarse curve
+
+
+class BearingAccumulator:
+    """Sum the last n score curves per (id, hops) (N4: single-frame bearings jump with the band, because each
+    band reflects differently; the true direction is the one the bands agree on). n = 1 means off."""
+
+    def __init__(self, n=4, max_age_s=40.0):
+        self.n, self.max_age_s, self.hist = int(n), float(max_age_s), {}
+
+    def add(self, key, now, score, offset_deg=0.0):
+        h = [(t, sc) for t, sc in self.hist.get(key, []) if now - t <= self.max_age_s][-(self.n - 1):] if self.n > 1 else []
+        h.append((now, score))
+        self.hist[key] = h
+        tot = np.sum([sc for _, sc in h], axis=0)
+        k = int(np.argmax(tot))
+        hi, lo, med = float(tot[k]), float(tot.min()), float(np.median(tot))
+        conf = min(1.0, max(0.0, (hi - med) / (hi - lo + 1e-9)))
+        deg = (float(COARSE_DEG[k]) + offset_deg + 180.0) % 360.0 - 180.0
+        return round(deg, 1), round(conf, 2), len(h)
 
 
 def bearing_window(frame, fs, window):
@@ -232,6 +257,9 @@ def band_noise_db(x, fs):
 
 
 # ---------------------------------------------------------------- victims
+REPORT_FIELDS = ("floor", "minutes", "motion", "status", "people", "battery", "knock")   # what a phone report may refresh
+
+
 class Tracker:
     """One record per id: confirmation (SPEC 1.7.6), hops-0 preference, phones' heard reports."""
 
@@ -239,6 +267,7 @@ class Tracker:
         self.bus = bus
         self.confirm_s = cfg.get("confirm_s", 60.0)
         self.hold_s = cfg.get("direct_hold_s", 30.0)
+        self.report_hold_s = cfg.get("report_hold_s", 90.0)
         self.recs = {}
         self.lock = threading.Lock()
 
@@ -254,17 +283,25 @@ class Tracker:
         """A valid frame for fields["id"] (station=False: from a phone's heard report). -> published event."""
         vid = fields["id"]
         with self.lock:
-            if not station:
-                r = self.recs.get(vid)
-                if r and r["station"] is not None and now - r["station"] < self.hold_s:
-                    return None                 # we hear it ourselves; the phone adds nothing
             r = self._rec(vid, now)
-            if station:
-                r["station"] = now
             hops = fields.get("hops", 0) or 0
-            if hops > 0 and r["direct"] is not None and now - r["direct"] < self.hold_s and r["event"]:
+            if not station and r["station"] is not None and now - r["station"] < self.report_hold_s and r["event"]:
+                # SPEC v1.2: a phone's report about an id we decoded ourselves refreshes the fields only.
+                # Our deg, band, snr_db and hops stay (N4: without this "via 1 relay" flipped to "no fix").
+                ev = dict(r["event"])
+                ev.update({k: fields[k] for k in REPORT_FIELDS if k in fields})
+            elif station and hops > 0 and r["direct"] is not None and now - r["direct"] < self.hold_s and r["event"]:
+                r["station"] = now
                 ev = dict(r["event"])           # relayed copy of a fresh original: only "last heard" moves
             else:
+                if station:
+                    r["station"] = now
+                    if deg is not None:
+                        r["deg"], r["deg_t"], r["deg_hops"] = deg, now, hops
+                    elif r.get("deg") is not None and r["deg_hops"] == hops and now - r["deg_t"] < self.report_hold_s:
+                        # this band gives no bearing (doa_bands): keep the last one we measured at the same hops.
+                        # Not from a relayed copy of a phone we hear directly: that's the relaying phone's direction.
+                        deg = r["deg"]
                 ev = {"t": "victim", **fields, "deg": deg, "band": band, "snr_db": round(snr_db, 1)}
                 if hops == 0 and station:
                     r["direct"] = now
@@ -327,6 +364,13 @@ def run(bus, cfg: dict, capture=None) -> None:
              f", ignoring direct frames from {sorted(ignore)}" if ignore else "")
 
     tracker = Tracker(bus, cfg)
+    doa_bands = {int(b) for b in cfg.get("doa_bands", (0, 1, 2, 3))}
+    if doa_bands != {0, 1, 2, 3}:
+        log.info("bearings only from bands %s (doa_bands); other frames keep the last direction", sorted(doa_bands))
+    n_acc = int(cfg.get("doa_accumulate", 1))
+    acc = BearingAccumulator(n_acc, float(cfg.get("doa_accumulate_s", 40.0))) if n_acc > 1 else None
+    if acc:
+        log.info("bearing = sum of the last %d frames' score curves per id (doa_accumulate)", n_acc)
 
     def on_heard(ev):
         fields = dict(ev.get("fields") or {})
@@ -338,7 +382,8 @@ def run(bus, cfg: dict, capture=None) -> None:
         out = tracker.frame(fields, None, ev.get("band"), float(ev.get("snr_db") or 0.0), time.monotonic(),
                             station=False)
         if out:
-            log.info("heard report %s via %s -> victim (deg null, confirmed=%s)", vid, ev.get("via"), out["confirmed"])
+            log.info("heard report %s via %s -> victim (deg %s, hops %s, confirmed=%s)", vid, ev.get("via"),
+                     out.get("deg"), out.get("hops"), out["confirmed"])
 
     bus.subscribe("heard", on_heard)
 
@@ -352,7 +397,7 @@ def run(bus, cfg: dict, capture=None) -> None:
     def frames_out(frames, now):
         for fr in frames:
             handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs,
-                         doa_ok, now, beta)
+                         doa_ok, now, beta, acc, doa_bands)
 
     with capture:
         while True:
@@ -402,26 +447,33 @@ def run(bus, cfg: dict, capture=None) -> None:
 
 
 def handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs, doa_ok,
-                 now, beta=PHAT_BETA):
+                 now, beta=PHAT_BETA, acc=None, bands=None):
     f = fr.fields
     vid, hops = f["id"], f.get("hops", 0)
     if hops == 0 and vid in ignore:
         log.info("frame %s hops 0 dropped (ignore_direct_ids, relay demo)", vid)
         return
-    deg = conf = None
-    if doa_ok:
+    deg = conf = raw = None
+    if doa_ok and (bands is None or fr.band in bands):
         start, stop = bearing_window(fr, fs, window)
         x = capture.ring.read(base + start, base + stop)
         if x is None:
             log.warning("frame %s: bearing window no longer in the ring", vid)
         else:
             t0 = time.thread_time()
-            deg, conf = estimate_bearing(x[:, raw_chans], fr.band, fs, mic_xy, c, offset, beta=beta)
+            if acc is None:
+                deg, conf = estimate_bearing(x[:, raw_chans], fr.band, fs, mic_xy, c, offset, beta=beta)
+                raw = deg
+            else:
+                raw, conf1, sc = estimate_bearing(x[:, raw_chans], fr.band, fs, mic_xy, c, offset, beta=beta, curve=True)
+                deg, conf, used = acc.add((vid, hops), now, sc, offset)
+                log.info("frame %s band %d raw bearing %+.1f (conf %.2f) -> %+.1f over %d frames", vid, fr.band, raw,
+                         conf1, deg, used)
             cpu["doa"] += time.thread_time() - t0
     if deg is not None and hops == 0:
         # A relayed frame's direction is the relaying phone's, not the victim's: no bearing event for it.
         bus.publish({"t": "bearing", "deg": deg, "conf": conf, "band": fr.band, "snr_db": round(fr.snr_db, 1),
-                     "src": "tag", "id": vid})
+                     "src": "tag", "id": vid, "raw_deg": raw})
     ev = tracker.frame(f, deg, fr.band, fr.snr_db, now)
     log.info("frame %s band %d snr %.1f q %.2f deg %s conf %s hops %d confirmed %s", vid, fr.band, fr.snr_db,
              fr.quality, deg, conf, hops, ev["confirmed"] if ev else None)

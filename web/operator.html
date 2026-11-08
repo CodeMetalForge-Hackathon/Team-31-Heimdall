@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f14">
+  <meta name="theme-color" content="#000000">
   <title>HEIMDALL · Drone Operator</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="css/heimdall.css">
+  <link rel="stylesheet" href="css/maps.css">
 </head>
 <body>
   <header class="op-top">
-    <div class="op-title">HEIMDALL <span>· Drone Operator</span></div>
+    <div class="op-title">Heimdall</div>
     <span class="pill connecting" id="conn">connecting</span>
-    <span class="topchip" id="drone">Drone: <b>—</b></span>
-    <span class="topchip compass" id="compass" title="Station heading">
+    <span class="topchip hidden" id="drone">Drone: <b>—</b></span>
+    <span class="topchip compass hidden" id="compass" title="Station heading">
       <svg viewBox="-12 -12 24 24" aria-hidden="true">
         <circle r="10.5" fill="none" stroke="#24303c" stroke-width="1.5"/>
         <g id="compass-needle"><path d="M0 -9 L3 0 L0 -2 L-3 0 Z" fill="#ffb020"/><path d="M0 9 L3 0 L0 2 L-3 0 Z" fill="#55606b"/></g>
@@ -21,8 +22,8 @@
       <b id="compass-text" class="num">—</b>
     </span>
     <div class="mode-toggle" role="group" aria-label="Camera mode">
-      <button type="button" id="mode-auto" class="on" aria-pressed="true">AUTO</button>
-      <button type="button" id="mode-manual" aria-pressed="false">MANUAL</button>
+      <button type="button" id="mode-auto" class="on" aria-pressed="true">Auto</button>
+      <button type="button" id="mode-manual" aria-pressed="false">Manual</button>
     </div>
     <span class="health" id="health" aria-label="Station modules"></span>
   </header>
@@ -42,50 +43,61 @@
       </section>
 
       <section class="panel dial-panel" aria-label="Direction">
-        <p class="label">Direction to target</p>
-        <div class="target-name" id="target-name">No signal yet</div>
-        <svg class="dial" id="dial" viewBox="-110 -110 220 220" role="img" aria-label="Direction dial">
-          <circle r="96" fill="#0e141b" stroke="#24303c" stroke-width="1.5"/>
-          <circle r="64" fill="none" stroke="#1c252f" stroke-width="1"/>
-          <circle r="32" fill="none" stroke="#1c252f" stroke-width="1"/>
-          <g id="dial-ticks"></g>
-          <text x="0" y="-100" text-anchor="middle" fill="#8a96a3" font-size="9" font-weight="700" letter-spacing="1">FRONT</text>
-          <text x="104" y="3" text-anchor="start" fill="#55606b" font-size="9">R</text>
-          <text x="-104" y="3" text-anchor="end" fill="#55606b" font-size="9">L</text>
-          <g id="dial-hist"></g>
-          <g id="dial-cam"><line x1="0" y1="0" x2="0" y2="-92" stroke="#e8edf2" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.7"/><circle cx="0" cy="-92" r="2.5" fill="#e8edf2" opacity="0.8"/></g>
-          <g id="dial-arrow" opacity="0">
-            <line x1="0" y1="-12" x2="0" y2="-70" stroke="#ffb020" stroke-width="9" stroke-linecap="round"/>
-            <path d="M0 -94 L13 -68 L-13 -68 Z" fill="#ffb020"/>
-          </g>
-          <!-- station seen from above, front arrow at top -->
-          <rect x="-11" y="-11" width="22" height="22" rx="4" fill="#18212b" stroke="#8a96a3" stroke-width="1.5"/>
-          <path d="M0 -20 L5 -12 L-5 -12 Z" fill="#8a96a3"/>
-        </svg>
-        <div class="instr idle" id="instr">WAITING</div>
-        <div class="instr-sub" id="instr-sub">&nbsp;</div>
+        <div class="navbar idle" id="navbar" aria-live="polite">
+          <svg class="mnv" id="mnv" viewBox="-12 -12 24 24" aria-hidden="true"><path d="M0 -10.5 L7.8 -1.5 L2.7 -1.5 L2.7 10.5 L-2.7 10.5 L-2.7 -1.5 L-7.8 -1.5 Z"/></svg>
+          <div class="navtext">
+            <div class="instr idle" id="instr">Waiting</div>
+            <div class="target-name" id="target-name">No signal yet</div>
+          </div>
+        </div>
         <div class="instr-note" id="instr-note"></div>
+        <div class="instr-sub" id="instr-sub"></div>
+        <!-- the station from above, like "you are here" on a map: front is up, the blue cone is the camera -->
+        <svg class="dial" id="dial" viewBox="-110 -110 220 220" role="img" aria-label="Direction dial">
+          <defs>
+            <radialGradient id="cone-grad" cx="0" cy="0" r="92" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#0a84ff" stop-opacity="0.55"/>
+              <stop offset="1" stop-color="#0a84ff" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <circle r="96" class="ring r0"/>
+          <circle r="64" class="ring"/>
+          <circle r="32" class="ring"/>
+          <g id="dial-ticks"></g>
+          <text x="0" y="-100.5" class="front">FRONT</text>
+          <g id="dial-cam"><path class="cone" d="M0 0 L-22.3 -89.3 A 92 92 0 0 1 22.3 -89.3 Z"/></g>
+          <g id="dial-hist"></g>
+          <g id="dial-arrow" opacity="0">
+            <line class="route-casing" x1="0" y1="-14" x2="0" y2="-72"/>
+            <line class="route" x1="0" y1="-14" x2="0" y2="-72"/>
+            <circle class="pin" cx="0" cy="-81" r="9.5"/>
+            <circle class="pin-dot" cx="0" cy="-81" r="3.3"/>
+          </g>
+          <circle class="puck-halo" r="19"/>
+          <circle class="puck" r="8.5"/>
+        </svg>
       </section>
     </div>
 
     <div class="op-col">
       <section class="panel" aria-label="Triage queue">
-        <p class="label">Triage queue <span class="count" id="queue-count"></span></p>
+        <div class="grabber" aria-hidden="true"></div>
+        <p class="label sheet-title">Victims <span class="count" id="queue-count"></span></p>
         <div class="queue" id="queue"><div class="queue-empty">No victims heard yet.</div></div>
       </section>
 
-      <section class="panel" aria-label="Sensors">
+      <section class="panel hidden" id="sensors-panel" aria-label="Sensors">
         <p class="label">Sensors</p>
         <div class="sensors">
-          <div class="scard"><p class="label">Radar</p><div class="sbig" id="radar-pres">—</div><div class="sline" id="radar-line">no data</div></div>
-          <div class="scard"><p class="label">Knock</p><div class="sbig" id="knock-big">—</div><div class="sline" id="knock-line">no knocks yet</div></div>
-          <div class="scard"><p class="label">Sound</p><div class="sbig" id="sound-big">—</div><div class="sline" id="sound-line">no data</div></div>
-          <div class="scard"><p class="label">Noise</p>
+          <div class="scard hidden" id="sc-radar"><p class="label">Radar</p><div class="sbig" id="radar-pres">—</div><div class="sline" id="radar-line">no data</div></div>
+          <div class="scard hidden" id="sc-knock"><p class="label">Knock</p><div class="sbig" id="knock-big">—</div><div class="sline" id="knock-line">no knocks yet</div></div>
+          <div class="scard hidden" id="sc-sound"><p class="label">Sound</p><div class="sbig" id="sound-big">—</div><div class="sline" id="sound-line">no data</div></div>
+          <div class="scard hidden" id="sc-noise"><p class="label">Noise</p>
             <div class="noisebars" id="noise-bars"><div><i></i></div><div><i></i></div><div><i></i></div><div><i></i></div></div>
             <div class="sline" id="noise-line">no data</div>
           </div>
-          <div class="scard"><p class="label">LoRa</p><div class="sbig" id="lora-big">—</div><div class="sline" id="lora-line">no data</div></div>
-          <div class="scard"><p class="label">Camera</p><div class="sbig" id="cam-big">—</div><div class="sline" id="cam-line">no data</div></div>
+          <div class="scard hidden" id="sc-lora"><p class="label">LoRa</p><div class="sbig" id="lora-big">—</div><div class="sline" id="lora-line">no data</div></div>
+          <div class="scard hidden" id="sc-cam"><p class="label">Camera</p><div class="sbig" id="cam-big">—</div><div class="sline" id="cam-line">no data</div></div>
         </div>
       </section>
 

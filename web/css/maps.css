@@ -1,0 +1,256 @@
+/* HEIMDALL "Maps" look: loaded after heimdall.css on the operator and victim pages.
+   Apple Maps dark mode: black map, floating translucent cards, system colors, few labels.
+   Remove this one <link> to get the old look back. */
+:root {
+  --m-bg: #000;
+  --m-map: #0b0d10;
+  --m-card: rgba(28, 28, 30, 0.86);
+  --m-card-solid: #1c1c1e;
+  --m-fill: rgba(118, 118, 128, 0.24);
+  --m-sep: rgba(84, 84, 88, 0.55);
+  --m-text: #fff;
+  --m-text-2: rgba(235, 235, 245, 0.6);
+  --m-text-3: rgba(235, 235, 245, 0.32);
+  --m-blue: #0a84ff;
+  --m-red: #ff453a;
+  --m-orange: #ff9f0a;
+  --m-yellow: #ffd60a;
+  --m-green: #30d158;
+  --m-purple: #bf5af2;
+  --m-gray: #8e8e93;
+  --m-radius: 16px;
+  --m-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  /* keep the old variables in step so untouched rules match */
+  --bg: #000; --panel: var(--m-card-solid); --panel-2: #2c2c2e; --line: var(--m-sep); --text: #fff;
+  --muted: var(--m-text-2); --accent: var(--m-blue); --critical: var(--m-red); --injured: var(--m-orange);
+  --noresp: #64d2ff; --ok: var(--m-green); --relayed: var(--m-purple); --off: #48484a;
+}
+body {
+  background: var(--m-bg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Helvetica Neue", system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+.label { display: none; }            /* no small-caps section labels: the layout says what each card is */
+:focus-visible { outline-color: var(--m-blue); }
+
+/* ---------------------------------------------------------------- operator: top bar */
+.op-top {
+  background: transparent; border: 0; padding: 14px 18px 4px; gap: 10px;
+  position: relative; z-index: 2;
+}
+.op-title { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; text-transform: none; }
+.op-title span { display: none; }
+.pill { border-radius: 999px; border: 0; padding: 4px 10px; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none;
+  background: var(--m-fill); color: var(--m-text-2); }
+.pill.live { display: none; }        /* connected is the normal state: say nothing */
+.pill.lost { background: rgba(255, 69, 58, 0.18); color: var(--m-red); }
+.pill.mock { background: rgba(255, 214, 10, 0.16); color: var(--m-yellow); }
+.pill::before { display: none; }
+.topchip { background: var(--m-fill); border: 0; border-radius: 999px; padding: 4px 10px; font-size: 13px; color: var(--m-text-2); }
+.topchip b { color: var(--m-text); font-weight: 600; }
+.mode-toggle { background: var(--m-fill); border: 0; border-radius: 9px; padding: 2px; gap: 0; margin-left: auto; }
+.mode-toggle button { border: 0; border-radius: 7px; min-height: 30px; padding: 0 16px; font-size: 13px; font-weight: 600;
+  letter-spacing: 0; text-transform: none; background: transparent; color: var(--m-text); }
+.mode-toggle button.on { background: #636366; color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
+.health { gap: 8px; }
+.hdot { font-size: 0; gap: 0; }      /* a healthy module is just a dot */
+.hdot i { width: 8px; height: 8px; }
+.hdot.ok i { background: var(--m-green); box-shadow: none; }
+.hdot.off i { background: #48484a; }
+.hdot.error { font-size: 12px; font-weight: 600; color: var(--m-red); gap: 5px; text-transform: none; letter-spacing: 0; }
+.hdot.error i { background: var(--m-red); }
+
+/* ---------------------------------------------------------------- operator: layout */
+.op-main { padding: 8px 18px 18px; gap: 14px; max-width: none; }
+.op-col { display: contents; }
+.op-main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "dial" "queue" "thermal" "sensors" "aim"; }
+.op-main section[aria-label="Thermal view"] { grid-area: thermal; }
+.op-main .dial-panel { grid-area: dial; }
+.op-main section[aria-label="Triage queue"] { grid-area: queue; }
+.op-main #sensors-panel { grid-area: sensors; }
+.op-main #aim { grid-area: aim; }
+@media (min-width: 760px) and (max-width: 1099px) {
+  .op-main { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start;
+    grid-template-areas: "dial queue" "dial thermal" "dial sensors" "aim aim"; }
+}
+@media (min-width: 1100px) {
+  body { height: 100vh; overflow: hidden; }
+  .op-main {
+    height: calc(100vh - 58px);
+    grid-template-columns: minmax(330px, 0.95fr) minmax(0, 1.45fr) minmax(280px, 0.85fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas: "queue dial thermal" "queue dial sensors" "queue dial aim";
+    align-items: start;
+  }
+  .op-main section[aria-label="Triage queue"] { align-self: stretch; overflow: auto; }
+  .op-main .dial-panel { align-self: stretch; }
+}
+
+.panel { background: var(--m-card); border: 0; border-radius: var(--m-radius); box-shadow: var(--m-shadow);
+  -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
+
+/* ---------------------------------------------------------------- operator: direction (the "map") */
+.dial-panel { background: radial-gradient(120% 90% at 50% 55%, #11151b 0%, var(--m-map) 70%); box-shadow: none;
+  display: flex; flex-direction: column; align-items: stretch; padding: 14px; position: relative; }
+.navbar { display: flex; align-items: center; gap: 14px; background: var(--m-card-solid); border-radius: 14px;
+  padding: 12px 16px; box-shadow: var(--m-shadow); }
+.mnv { width: 46px; height: 46px; flex: none; fill: #fff; transition: transform 0.6s cubic-bezier(.2,.8,.2,1); }
+.navbar.idle .mnv { opacity: 0.2; }
+.navtext { min-width: 0; }
+.instr { margin: 0; text-align: left; color: #fff; font-size: 34px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05;
+  white-space: nowrap; text-transform: none; }
+.instr.idle { color: var(--m-text-2); font-size: 24px; }
+.instr .ideg { font-variant-numeric: tabular-nums; }
+.instr .iword { font-size: 22px; font-weight: 600; color: var(--m-text-2); margin-left: 8px; letter-spacing: -0.01em; }
+.target-name { margin: 2px 0 0; text-align: left; font-size: 15px; color: var(--m-text-2); letter-spacing: 0; text-transform: none; }
+.target-name b { color: #fff; font-weight: 600; }
+.instr-sub { min-height: 0; margin: 8px 2px 0; text-align: left; font-size: 13px; color: var(--m-text-3); }
+.instr-sub:empty { display: none; }
+.instr-note { margin: 8px 0 0; align-self: flex-start; text-align: left; font-size: 12px; font-weight: 600; }
+.instr-note:empty { display: none; }
+.instr-note.relay { color: var(--m-purple); background: rgba(191, 90, 242, 0.16); padding: 3px 10px; border-radius: 999px; }
+.instr-note.muted { color: var(--m-text-2); background: var(--m-fill); padding: 3px 10px; border-radius: 999px; }
+.op-main .instr { font-size: 34px; }
+.dial { width: 100%; max-width: none; flex: 1 1 auto; min-height: 0; max-height: 100%; margin: 6px auto 0; display: block; }
+@media (min-width: 1100px) { .dial { height: calc(100vh - 230px); width: auto; max-width: 100%; } }
+.dial .ring { fill: none; stroke: rgba(255, 255, 255, 0.07); stroke-width: 1; }
+.dial .ring.r0 { fill: rgba(255, 255, 255, 0.015); stroke: rgba(255, 255, 255, 0.12); }
+#dial-ticks line { stroke: rgba(255, 255, 255, 0.14); }
+#dial-ticks line:nth-child(6n+1) { stroke: rgba(255, 255, 255, 0.35); }
+.dial .front { fill: var(--m-text-3); font-size: 5.2px; font-weight: 600; text-anchor: middle; letter-spacing: 0.08em; }
+#dial-hist circle { fill: var(--m-blue); }
+.dial .cone { fill: url(#cone-grad); }
+.dial .route-casing { stroke: #0040a0; stroke-width: 11; stroke-linecap: round; }
+.dial .route { stroke: var(--m-blue); stroke-width: 7; stroke-linecap: round; }
+.dial .pin { fill: var(--m-red); stroke: #fff; stroke-width: 2.4; }
+.dial .pin-dot { fill: #fff; }
+#dial-arrow.st-injured .pin { fill: var(--m-orange); }
+#dial-arrow.st-no_response .pin { fill: #64d2ff; }
+#dial-arrow.st-ok .pin { fill: var(--m-green); }
+#dial-arrow { transition: opacity 0.4s; }
+.dial .puck-halo { fill: rgba(10, 132, 255, 0.2); }
+.dial .puck { fill: var(--m-blue); stroke: #fff; stroke-width: 3; }
+
+/* ---------------------------------------------------------------- operator: victims sheet */
+section[aria-label="Triage queue"] { padding: 8px 0 6px; }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: rgba(235, 235, 245, 0.25); margin: 0 auto 8px; }
+.label.sheet-title { display: flex; align-items: baseline; gap: 8px; margin: 2px 18px 6px; font-size: 22px; font-weight: 700;
+  letter-spacing: -0.02em; text-transform: none; color: #fff; }
+.label.sheet-title .count { font-size: 17px; font-weight: 600; color: var(--m-text-2); }
+.queue { gap: 0; }
+.queue-empty { margin: 6px 18px 10px; color: var(--m-text-2); font-size: 15px; }
+.vcard { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: transparent; border: 0;
+  border-radius: 0; padding: 10px 18px; margin: 0; color: var(--m-text); box-shadow: none; position: relative; }
+.vcard + .vcard::before { content: ""; position: absolute; top: 0; left: 74px; right: 0; height: 1px; background: var(--m-sep); transform: scaleY(0.5); }
+.vcard:hover { background: rgba(255, 255, 255, 0.04); }
+.vcard.sel { background: rgba(10, 132, 255, 0.18); }
+.vcard.unconf { opacity: 0.5; }
+.vcard.stopped { animation: none; box-shadow: none; border: 0; }
+.vglyph { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; font-weight: 700;
+  color: #fff; background: var(--m-gray); position: relative; }
+.vglyph.g-critical { background: var(--m-red); }
+.vglyph.g-injured { background: var(--m-orange); }
+.vglyph.g-no_response { background: #64d2ff; color: #002b3d; }
+.vglyph.g-ok { background: var(--m-green); }
+.vcard.stopped .vglyph::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--m-red);
+  animation: m-pulse 1.4s ease-out infinite; }
+@keyframes m-pulse { from { transform: scale(0.9); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+.vbody { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vtitle { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.vid { font-size: inherit; font-weight: inherit; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.vsub { font-size: 15px; line-height: 1.3; color: var(--m-text-2); }
+.vtags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.tag { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; letter-spacing: 0; }
+.tag.stop { background: rgba(255, 69, 58, 0.2); color: #ff6961; }
+.tag.relay { background: rgba(191, 90, 242, 0.18); color: #da8fff; }
+.tag.knock { background: rgba(10, 132, 255, 0.2); color: #64b5ff; }
+.tag.unconf, .tag.nofix, .tag.batt { background: var(--m-fill); color: var(--m-text-2); }
+.vtrail { flex: none; display: flex; align-items: center; gap: 6px; color: var(--m-text-2); font-size: 15px; font-weight: 600; }
+.vtrail .vbear { font-variant-numeric: tabular-nums; }
+.vdir { width: 16px; height: 16px; fill: var(--m-blue); transition: transform 0.4s; }
+
+/* ---------------------------------------------------------------- operator: thermal picture-in-picture */
+section[aria-label="Thermal view"] { padding: 0; overflow: hidden; }
+.thermal-wrap { border-radius: var(--m-radius); border: 0; }
+.thermal-tag { background: rgba(0, 0, 0, 0.45); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 0;
+  border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; color: #fff; }
+.thermal-tag.tr { display: none; }   /* pan/tilt is what the dial's blue cone shows */
+.thermal-tag.bl { color: var(--m-text-2); }
+.thermal-tag.tl { color: #fff; }
+
+/* ---------------------------------------------------------------- operator: sensors as small cards */
+#sensors-panel { background: transparent; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.sensors { gap: 10px; }
+.op-main .sensors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scard { background: var(--m-card); border: 0; border-radius: 14px; padding: 12px 14px; box-shadow: var(--m-shadow);
+  -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
+.scard .sbig, .op-main .scard .sbig { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; text-transform: none; }
+.scard .sline { font-size: 13px; color: var(--m-text-2); }
+.scard .sline:empty { display: none; }
+#sc-cam { display: none !important; } /* the mode switch and the dial already show the camera */
+.noisebars i { background: var(--m-blue); }
+.badge { text-transform: none; letter-spacing: 0; }
+.quiet-badge, .badge.knock.quiet-badge { background: rgba(48, 209, 88, 0.18); color: var(--m-green); border: 0; border-radius: 999px; }
+
+/* ---------------------------------------------------------------- operator: manual aim */
+#aim .row label { color: var(--m-text-2); font-size: 15px; }
+#aim input[type=range] { accent-color: var(--m-blue); }
+.btn { border: 0; border-radius: 12px; background: var(--m-fill); color: #fff; font-weight: 600; letter-spacing: 0; text-transform: none; }
+
+/* ---------------------------------------------------------------- victim page */
+.vic { padding-top: 10px; }
+.vic-head { align-items: baseline; }
+.vic-head .brand { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; text-transform: none; }
+.vic-head .myid { font-size: 13px; color: var(--m-text-3); }
+.vic-head .myid b { font-size: 15px; color: var(--m-text-2); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.sos-wrap .ring { border-color: rgba(255, 69, 58, 0.35); }
+.sos { background: radial-gradient(circle at 50% 35%, #ff6b61 0%, #ff3b30 45%, #d70015 100%); border: 0;
+  box-shadow: 0 18px 50px rgba(255, 59, 48, 0.35), inset 0 -6px 18px rgba(0, 0, 0, 0.18);
+  font-size: 34px; font-weight: 700; letter-spacing: -0.01em; text-transform: none; }
+.sos small { font-size: 15px; font-weight: 500; letter-spacing: 0; opacity: 0.85; }
+.beacon-line { font-size: 15px; color: var(--m-text-2); }
+.beacon-line b { color: #fff; font-weight: 600; }
+.beacon-idle { color: var(--m-text-2); }
+.vsec h2 { font-size: 13px; font-weight: 600; color: var(--m-text-2); text-transform: none; letter-spacing: 0; margin: 0 4px 8px; }
+.vsec .note { font-size: 13px; color: var(--m-text-3); }
+section[aria-labelledby="h-floor"] .note:not(#motion-line) { display: none; }   /* the floor buttons explain themselves */
+.status-row, .stgrid { gap: 0; background: var(--m-fill); border-radius: 10px; padding: 2px; }
+.stbtn { border: 0; border-radius: 8px; background: transparent; min-height: 40px; font-size: 15px; font-weight: 600; color: #fff; }
+.stbtn[aria-pressed="true"] { background: #636366; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35); }
+.stbtn[data-s="ok"][aria-pressed="true"] { background: var(--m-green); color: #00210b; }
+.stbtn[data-s="injured"][aria-pressed="true"] { background: var(--m-orange); color: #2b1a00; }
+.stbtn[data-s="critical"][aria-pressed="true"] { background: var(--m-red); }
+.stepper .btn { min-height: 40px; min-width: 52px; border-radius: 10px; font-size: 22px; }
+.stepper .val { font-size: 28px; font-weight: 700; }
+.stepper .btn.unk { font-size: 15px; }
+.stepper .btn.unk.on, .stepper .btn.unk[aria-pressed="true"] { background: var(--m-blue); color: #fff; }
+.vsec > p.label { display: block; font-size: 13px; font-weight: 600; color: var(--m-text-2); text-transform: none; letter-spacing: 0; margin: 0 4px 8px; }
+.meter { height: 6px; border-radius: 3px; background: var(--m-fill); border: 0; }
+.meter i { background: var(--m-blue); border-radius: 3px; }
+details.fold { background: var(--m-card-solid); border: 0; border-radius: 12px; }
+details.fold > summary { font-size: 17px; font-weight: 400; }
+details.fold > summary::after { content: "\203A"; font-size: 24px; color: var(--m-text-3); transition: transform 0.2s; }
+details.fold[open] > summary::after { content: "\203A"; transform: rotate(90deg); }
+.err { border-radius: 12px; border: 0; background: rgba(255, 159, 10, 0.14); color: var(--m-orange); font-size: 13px; }
+
+/* ---------------------------------------------------------------- big screens (projector at 1080p) */
+@media (min-width: 1600px) {
+  .op-title { font-size: 20px; }
+  .instr, .op-main .instr { font-size: 52px; }
+  .instr .iword { font-size: 30px; }
+  .mnv { width: 64px; height: 64px; }
+  .target-name { font-size: 19px; }
+  .instr-note { font-size: 14px; }
+  .label.sheet-title { font-size: 28px; }
+  .label.sheet-title .count { font-size: 21px; }
+  .vtitle { font-size: 21px; }
+  .vsub { font-size: 17px; }
+  .vglyph { width: 52px; height: 52px; font-size: 26px; }
+  .vcard + .vcard::before { left: 82px; }
+  .vtrail { font-size: 18px; }
+  .vdir { width: 20px; height: 20px; }
+  .tag { font-size: 13px; }
+  .scard .sbig, .op-main .scard .sbig { font-size: 24px; }
+  .scard .sline { font-size: 15px; }
+  .thermal-tag { font-size: 14px; }
+}
