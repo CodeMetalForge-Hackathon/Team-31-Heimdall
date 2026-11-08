@@ -62,6 +62,8 @@ static uint32_t lastMoveMs = 0;            // 0 = never moved since boot
 static bool movingReported = false;
 static uint32_t quietUntilMs = 0;          // IMU ignored until then (speaker / motor)
 static uint8_t frameBytes[6];
+struct Debounced { uint8_t pin; bool stable, lastRaw; uint32_t tChange; };
+static Debounced sosBtn = {PIN_BTN, false, false, 0}, touchBtn = {PIN_TOUCH, false, false, 0};
 
 static const char *statusName(uint8_t s) {
   static const char *names[] = {"no_response", "ok", "injured", "critical"};
@@ -163,8 +165,8 @@ static void buzzTick(uint32_t now) {
 }
 
 // ---------------- buttons (debounced rising edge) ----------------
-struct Debounced { uint8_t pin; bool stable, lastRaw; uint32_t tChange; };
-static Debounced sosBtn = {PIN_BTN, false, false, 0}, touchBtn = {PIN_TOUCH, false, false, 0};
+// (struct Debounced and the two buttons are defined in the state section above: Arduino's
+//  auto-generated prototype for pressed() lands before the first function and needs the type.)
 
 static bool pressed(Debounced &d, uint32_t now) {
   bool raw = digitalRead(d.pin);
