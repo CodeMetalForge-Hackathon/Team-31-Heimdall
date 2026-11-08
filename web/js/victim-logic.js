@@ -195,6 +195,7 @@
   const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const LISTEN = params.has('listen') ? params.get('listen') !== '0' : true;
+  const RELAY_ONLY = params.get('mode') === 'relay';   // ?mode=relay: listen + relay, no beacon of our own (SPEC v1.3)
   const USE_SESSION = params.get('session') !== '0';
   const DEBUG = params.has('debug');
   const log = (...a) => console.log('[HEIMDALL victim]', ...a);
@@ -286,14 +287,15 @@
     S.trigger = trigger;
     S.startMs = Date.now();
     S.k = 0; S.sent = 0; S.lastBand = null;
-    S.nextAt = c.currentTime + 0.15;
+    S.nextAt = RELAY_ONLY ? Infinity : c.currentTime + 0.15;   // relay only: our own beacon is never due
     S.relay = new RelayQueue(vic.getSettings().id);
     clearInterval(S.tick);
     S.tick = setInterval(tick, 250);
     tick();
     connectStation();
     requestWakeLock();
-    log('beacon on', trigger, c.sampleRate + ' Hz');
+    if (RELAY_ONLY) setErr('mode', 'Relay only: this phone passes on other SOS calls and sends none of its own.');
+    log(RELAY_ONLY ? 'relay only on' : 'beacon on', trigger, c.sampleRate + ' Hz');
   }
 
   function stopBeacon() {
@@ -308,6 +310,7 @@
     vic.setBeacon({ on: false });
     vic.setMicLevel(0);
     setErr('mic', null);
+    setErr('mode', null);
     log('beacon off');
   }
 
@@ -321,7 +324,7 @@
     if (S.relay) S.relay.myId = s.id;
 
     if (S.nextAt < now - 0.5) S.nextAt = now + 0.1; // the page was asleep: send now, don't burst
-    if (now >= S.nextAt - 0.3) {
+    if (!RELAY_ONLY && now >= S.nextAt - 0.3) {
       const fields = buildFields(s, { startMs: S.startMs, nowMs: Date.now(), lastMoveMs: S.lastMoveMs, battery: S.battery });
       const band = HM.bandFor(S.k, s.id);
       const at = play(fields, band, planOwn(S.nextAt, S.booked), 'own');
@@ -340,7 +343,8 @@
       }
     }
 
-    vic.setBeacon({ on: true, band: S.lastBand, nextInSec: Math.max(0, S.nextAt - now), sent: S.sent, trigger: S.trigger });
+    vic.setBeacon(RELAY_ONLY ? { on: true, sent: S.stats.relayed, trigger: S.trigger }
+      : { on: true, band: S.lastBand, nextInSec: Math.max(0, S.nextAt - now), sent: S.sent, trigger: S.trigger });
     vic.setMotion(S.lastMoveMs !== null && Date.now() - S.lastMoveMs < 2000);
     if (DEBUG) debugLine();
   }
