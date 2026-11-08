@@ -76,7 +76,7 @@ A phone in victim mode with "relay" on:
 4. Transmits the **same payload with hops + 1** (recompute the CRC) on band `(received band + 2) % 4`. **(v1.2)** It was + 1, the original's next band, so a relay could collide with the original's next frame.
 5. Never plays two frames at once: if its own beacon is playing or due in the next 2.5 s, it sends the relay right after its own frame ends. A phone never decodes or relays its own id. **(v1.1)**
 
-**Relay-only phones (v1.3):** a phone that opens the victim page with `?mode=relay` follows steps 1 to 5 but never sends a beacon of its own, so it never shows up as a victim. Its SOS button only starts listening and relaying. On stage this is relay phone C.
+**Relay-only phones (v1.3):** a phone that opens the victim page with `?mode=relay` follows steps 1 to 5 but never sends a beacon of its own, so it never shows up as a victim. It skips the 30 s per-id hold-off of step 2: having no beacon of its own, it passes on every frame it hears (the wait, the re-waits and the one-pending-copy-per-id rule still apply). Its SOS button only starts listening and relaying. On stage this is relay phone C.
 
 The Ear keeps one record per id, prefers hops 0, and labels relayed records "via relay".
 
