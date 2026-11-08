@@ -23,6 +23,8 @@ The operator page runs on the laptop, full screen on the projector (thermal, dir
 
 **The Tag, then the phones (in this order)**
 - [ ] **T-15 or earlier: the Tag on its power bank.** It starts beaconing by itself, status Injured. Mika holds it.
+- [ ] **Never press the Tag's SOS button after power-on.** It restarts its minutes at 0, and then it loses the tie with phone A. Hold the Tag by the board edge, not the touch pad (a touch changes its status; it starts as Injured).
+- [ ] Before the run: check the Tag's 5V wire and speaker plug. Both came loose once.
 - [ ] **Phone A, at least 3 minutes after the Tag:** victim page, settings: **relay OFF**, status **Injured**. Tap SOS. Propped up in pile A's opening, speaker toward the station.
 - [ ] **Phone C:** open `https://10.42.0.1:8443/victim.html?mode=relay` and tap **Start relay**. The button then says Relaying. On its mark next to pile B.
 - [ ] Every phone: volume to max, iPhone silent switch **off**, Auto-Lock: Never, page open.
