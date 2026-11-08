@@ -38,6 +38,9 @@ CONFIG = {
         "confirm_s": 60.0,           # a new id needs a 2nd frame within this to be confirmed (SPEC 1.7.6)
         "direct_hold_s": 30.0,       # a hops-0 frame this recent makes relayed copies only refresh "last heard"
         "ignore_direct_ids": [],     # relay demo: drop hops-0 frames from these ids, e.g. ["1A2B"]
+        "report_hold_s": 90.0,       # a phone's heard report about an id we decoded this recently only refreshes its fields (SPEC v1.2)
+        "doa_accumulate": 1,         # 1 = bearing from each frame alone; 4 = sum the last 4 frames' score curves per id
+        "doa_accumulate_s": 40.0,    # ...but only frames from the last 40 s
         "cpu_log_s": 30.0,           # how often to log the decoder CPU share
     },
     "lora": {"freq_mhz": 915.0},
@@ -52,3 +55,8 @@ if _env is not None:
 _env = os.environ.get("HEIMDALL_IGNORE_DIRECT")
 if _env is not None:
     CONFIG["audio"]["ignore_direct_ids"] = [v.strip().upper() for v in _env.split(",") if v.strip()]
+
+# Bearing smoothing (N6): HEIMDALL_DOA_ACCUMULATE=4 sums the last 4 frames' score curves per id; 1 = off
+_env = os.environ.get("HEIMDALL_DOA_ACCUMULATE")
+if _env:
+    CONFIG["audio"]["doa_accumulate"] = max(1, int(_env))

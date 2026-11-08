@@ -62,3 +62,29 @@ def test_offset_wraps():
     sig = synth(pack(FIELDS), 1, FS)[: int(PREAMBLE_S * FS)]
     deg, _ = estimate_bearing(arrive(sig, 170.0, XY), 1, FS, XY, C, offset_deg=20.0)
     assert ang_err(deg, -170.0) <= 3.0 and -180.0 <= deg <= 180.0
+
+
+def test_accumulator_finds_the_direction_the_bands_agree_on():
+    """N6: one band at a time can point at a reflection. Two bands from 35 deg, one from a reflection at -120 and
+    one from a reflection at 150: the sum of the 4 score curves still reads 35."""
+    from ear.modules.audio import BearingAccumulator
+    acc = BearingAccumulator(4, 40.0)
+    out = None
+    for t, (band, theta) in enumerate([(0, 35.0), (1, -120.0), (2, 35.0), (3, 150.0)]):
+        sig = synth(pack(FIELDS), band, FS)[: int(PREAMBLE_S * FS)]
+        _, _, sc = estimate_bearing(arrive(sig, theta, XY, seed=t), band, FS, XY, C, curve=True)
+        out = acc.add(("A001", 0), 8.0 * t, sc)
+    assert ang_err(out[0], 35.0) <= 3.0, out
+    assert out[2] == 4
+
+
+def test_accumulator_forgets_old_frames_and_keeps_ids_apart():
+    from ear.modules.audio import BearingAccumulator
+    acc = BearingAccumulator(4, 40.0)
+    sig = synth(pack(FIELDS), 1, FS)[: int(PREAMBLE_S * FS)]
+    _, _, left = estimate_bearing(arrive(sig, -35.0, XY), 1, FS, XY, C, curve=True)
+    _, _, right = estimate_bearing(arrive(sig, 35.0, XY), 1, FS, XY, C, curve=True)
+    acc.add(("A001", 0), 0.0, left)
+    assert acc.add(("1A2B", 0), 1.0, right)[0] == 35.0          # another id: not mixed in
+    deg, _, used = acc.add(("A001", 0), 100.0, right)             # 100 s later: the old frame is dropped
+    assert deg == 35.0 and used == 1
