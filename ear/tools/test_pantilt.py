@@ -125,3 +125,15 @@ def test_switching_to_manual_keeps_the_head_where_it_is():
     assert a.target(t) == (61, 0, "manual"), "Manual takes over at the current position, not at the stale 75"
     a.on_cmd({"pan": 20, "tilt": 5})
     assert a.target(t) == (20.0, 5.0, "manual"), "a new command still moves it"
+
+
+def test_targets_are_clamped_to_what_this_mount_can_reach():
+    # servo +-90 around the camera's +30 zero: bearings -60..+120. The dial and the servo must agree on the edge.
+    a = pantilt.Aimer({**pantilt.DEFAULTS, "pan_dir": -1, "pan_offset_deg": 30.0})
+    t = time.time()
+    a.on_victim({"id": "77C1", "status": "critical", "motion": False, "minutes": 2, "deg": -80.0, "ts": t})
+    assert a.target(t)[0] == -60.0
+    a.on_victim({"id": "77C1", "status": "critical", "motion": False, "minutes": 2, "deg": 100.0, "ts": t})
+    assert a.target(t)[0] == 100.0, "reachable on this mount even though it is past +90"
+    a.on_cmd({"pan": -89, "tilt": 0})
+    assert a.target(t)[:2] == (-60.0, 0.0)

@@ -29,8 +29,9 @@ DEFAULTS = {
     "min_conf": 0.3,      # ignore bearings less confident than this
     "min_move_deg": 4,    # auto mode: don't re-aim for a smaller change (less servo noise near the mics)
     "hold_s": 1.5,        # auto mode: at least this long between moves
-    "fresh_s": 90.0,      # victims / bearings older than this are not aimed at. = audio.report_hold_s: a relayed phone
-                          # gets a direction only every 32-42 s (relay hold-off), and 90 survives one missed relay
+    "fresh_s": 90.0,      # victims / bearings older than this are not aimed at. = audio.report_hold_s: a relayed phone's
+                          # direction arrives every 10-40 s (relay-only phone C passes on every frame it hears, a normal
+                          # phone at most one per id per 30 s), and 90 survives one missed relay
     "status_s": 2.0,      # publish a pantilt event at least this often
     "pan_dir": 1,         # -1 if a positive servo pan turns the camera LEFT (servo mounted the other way round)
     "pan_offset_deg": 0.0,  # bearing the camera looks at with the pan servo centred (its zero vs the mic front arrow)
@@ -62,6 +63,10 @@ class Aimer:
         self.mode = "auto"
         self.manual = (0.0, 0.0)
         self.current = HOME        # where the head was last sent (bearing degrees), kept up to date by run()
+        # bearings the servo can reach on this mount (servo +-90 around the camera's zero), so the published pan,
+        # the dial and the thermal boxes never claim a direction the camera isn't looking at
+        off = float(cfg.get("pan_offset_deg", 0.0))
+        self.pan_lo, self.pan_hi = off + PAN_MIN, off + PAN_MAX
         self.victims = {}          # id -> latest fields + "deg", "deg_ts"
         self.last_bearing = None   # (deg, ts) of the newest confident bearing
 
@@ -96,7 +101,7 @@ class Aimer:
     def on_cmd(self, ev):
         with self.lock:
             self.mode = "manual"
-            self.manual = (clamp(float(ev.get("pan") or 0), PAN_MIN, PAN_MAX),
+            self.manual = (clamp(float(ev.get("pan") or 0), self.pan_lo, self.pan_hi),
                            clamp(float(ev.get("tilt") or 0), TILT_MIN, TILT_MAX))
 
     def on_mode(self, ev):
@@ -119,9 +124,9 @@ class Aimer:
                 vid, v = min(cands, key=lambda kv: (RANK.get(kv[1].get("status"), 4),
                                                     motion_rank(kv[1], now),
                                                     -(kv[1].get("minutes") or 0)))
-                return clamp(v["deg"], PAN_MIN, PAN_MAX), self.cfg["tilt"], "victim " + vid
+                return clamp(v["deg"], self.pan_lo, self.pan_hi), self.cfg["tilt"], "victim " + vid
             if self.last_bearing and now - self.last_bearing[1] <= fresh:
-                return clamp(self.last_bearing[0], PAN_MIN, PAN_MAX), self.cfg["tilt"], "bearing"
+                return clamp(self.last_bearing[0], self.pan_lo, self.pan_hi), self.cfg["tilt"], "bearing"
             return None
 
 
@@ -232,6 +237,7 @@ def run(bus, cfg: dict) -> None:
     log.info("start: head straight (pan %d tilt %d; servo %d: pan_dir %d, offset %+.0f)", *HOME,
              servo_pan(cfg, HOME[0]), cfg["pan_dir"], cfg["pan_offset_deg"])
     last_sent, last_move, last_status = HOME, time.time(), 0.0
+    aimer.current = HOME                   # the Aimer is shared across restarts: Manual must take over from here
     try:
         while True:
             if state["error"] is not None:
