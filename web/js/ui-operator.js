@@ -470,7 +470,7 @@
       ctx.strokeStyle = '#39d98a';
       ctx.lineWidth = 2 * dpr;
       ctx.strokeRect(x, y, bw, bh);
-      const label = fmt(s.temp_c, 1) + ' °C';
+      const label = s.temp_c === null || s.temp_c === undefined ? 'Warm' : fmt(s.temp_c, 1) + ' °C';   // gray-mode cameras give no °C
       const tw = ctx.measureText(label).width + 8 * dpr;
       const ly = y > 18 * dpr ? y : y + bh + 18 * dpr;
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -483,7 +483,7 @@
   function onThermal(e) {
     state.thermal = e;
     if (thermal.mode === 'img') $('thermal-src').textContent = 'LIVE';   // the thermal module is running
-    $('thermal-max').textContent = 'max ' + fmt(e.max_c, 1) + ' °C';
+    $('thermal-max').textContent = e.max_c === null || e.max_c === undefined ? '' : 'max ' + fmt(e.max_c, 1) + ' °C';
     drawOverlay();
   }
 
