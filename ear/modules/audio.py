@@ -367,6 +367,9 @@ def run(bus, cfg: dict, capture=None) -> None:
     doa_bands = {int(b) for b in cfg.get("doa_bands", (0, 1, 2, 3))}
     if doa_bands != {0, 1, 2, 3}:
         log.info("bearings only from bands %s (doa_bands); other frames keep the last direction", sorted(doa_bands))
+    front = float(cfg.get("doa_front_deg") or 0) or None
+    if front:
+        log.info("bearings more than %.0f deg from the front arrow are dropped as reflections (doa_front_deg)", front)
     n_acc = int(cfg.get("doa_accumulate", 1))
     acc = BearingAccumulator(n_acc, float(cfg.get("doa_accumulate_s", 40.0))) if n_acc > 1 else None
     if acc:
@@ -397,7 +400,7 @@ def run(bus, cfg: dict, capture=None) -> None:
     def frames_out(frames, now):
         for fr in frames:
             handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs,
-                         doa_ok, now, beta, acc, doa_bands)
+                         doa_ok, now, beta, acc, doa_bands, front)
 
     with capture:
         while True:
@@ -446,8 +449,13 @@ def run(bus, cfg: dict, capture=None) -> None:
                 last_cpu_log = now
 
 
+def behind(raw, front):
+    """True if a single-frame bearing points behind the station (further than `front` from the front arrow)."""
+    return bool(front) and raw is not None and abs(raw) > front
+
+
 def handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs, doa_ok,
-                 now, beta=PHAT_BETA, acc=None, bands=None):
+                 now, beta=PHAT_BETA, acc=None, bands=None, front=None):
     f = fr.fields
     vid, hops = f["id"], f.get("hops", 0)
     if hops == 0 and vid in ignore:
@@ -464,11 +472,19 @@ def handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore
             if acc is None:
                 deg, conf = estimate_bearing(x[:, raw_chans], fr.band, fs, mic_xy, c, offset, beta=beta)
                 raw = deg
+                if behind(raw, front):
+                    deg = conf = None
             else:
                 raw, conf1, sc = estimate_bearing(x[:, raw_chans], fr.band, fs, mic_xy, c, offset, beta=beta, curve=True)
-                deg, conf, used = acc.add((vid, hops), now, sc, offset)
-                log.info("frame %s band %d raw bearing %+.1f (conf %.2f) -> %+.1f over %d frames", vid, fr.band, raw,
-                         conf1, deg, used)
+                if behind(raw, front):
+                    deg = conf = None          # a reflection: keep it out of the sum too
+                else:
+                    deg, conf, used = acc.add((vid, hops), now, sc, offset)
+                    log.info("frame %s band %d raw bearing %+.1f (conf %.2f) -> %+.1f over %d frames", vid, fr.band,
+                             raw, conf1, deg, used)
+            if deg is None and raw is not None:
+                log.info("frame %s band %d raw bearing %+.1f is behind the station: dropped, keeping the last direction",
+                         vid, fr.band, raw)
             cpu["doa"] += time.thread_time() - t0
     if deg is not None and hops == 0:
         # A relayed frame's direction is the relaying phone's, not the victim's: no bearing event for it.

@@ -42,6 +42,8 @@ CONFIG = {
         "doa_accumulate": 1,         # 1 = bearing from each frame alone; 4 = sum the last 4 frames' score curves per id
         "doa_accumulate_s": 40.0,    # ...but only frames from the last 40 s
         "doa_bands": [0, 1, 2, 3],   # bands whose frames give a bearing; the others keep the last one (N7)
+        "doa_front_deg": 95,         # bearings further than this from the front arrow are reflections on stage
+                                     # (nothing chirps behind the station): dropped, the last one kept. 0 = off
         "cpu_log_s": 30.0,           # how often to log the decoder CPU share
     },
     "lora": {"freq_mhz": 915.0},
@@ -61,6 +63,11 @@ if _env is not None:
 _env = os.environ.get("HEIMDALL_DOA_ACCUMULATE")
 if _env:
     CONFIG["audio"]["doa_accumulate"] = max(1, int(_env))
+
+# Front-only bearings (N11): HEIMDALL_DOA_FRONT=95 ; 0 = take bearings from all around
+_env = os.environ.get("HEIMDALL_DOA_FRONT")
+if _env:
+    CONFIG["audio"]["doa_front_deg"] = float(_env)
 
 # Bands that give bearings (N7): HEIMDALL_DOA_BANDS=1,2 ; empty = all four
 _env = os.environ.get("HEIMDALL_DOA_BANDS")

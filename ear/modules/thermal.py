@@ -11,6 +11,7 @@ Two modes, chosen from what the camera sends (override with cfg "mode"):
   "gray":  a normal picture only. Hotspots by brightness; temperatures unknown (temp_c, max_c = null).
 Standalone test:  python -m ear.modules.thermal      (also saves thermal_test.jpg every 5 s)
 """
+import atexit
 import glob
 import logging
 import os
@@ -156,7 +157,18 @@ def colorize(gray, temps):
     return cv2.applyColorMap(g, cv2.COLORMAP_INFERNO)
 
 
-_shared = {"pan": 0.0, "subscribed": False}
+_shared = {"pan": 0.0, "subscribed": False, "thread": None}
+_stop = threading.Event()
+
+
+@atexit.register
+def _release_camera():
+    """The Ear is stopping: let run() leave cap.read() and release the camera before Python exits.
+    A daemon thread killed inside OpenCV aborts the process ("FATAL: exception not rethrown", SIGABRT)."""
+    _stop.set()
+    t = _shared["thread"]
+    if t is not None and t is not threading.current_thread():
+        t.join(timeout=1.5)
 
 
 def _on_pantilt(ev):
@@ -176,8 +188,9 @@ def run(bus, cfg: dict) -> None:
         _shared["subscribed"] = True
     w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     mode_logged, last_jpg, last_det, fails = None, 0.0, 0.0, 0
+    _shared["thread"] = threading.current_thread()
     try:
-        while True:
+        while not _stop.is_set():
             ok, raw = cap.read()
             if not ok or raw is None:
                 fails += 1
