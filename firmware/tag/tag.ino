@@ -284,7 +284,9 @@ void loop() {
     else Serial.printf("STILL %lus\n", (unsigned long)(MOTION_WINDOW_MS / 1000));
   }
 
-  if (pressed(sosBtn, now)) setSos(!sos, now);
+  // SOS edges are ignored during our own frame, the motor buzz and QUIET_AFTER_MS after them, like the touch pad:
+  // on Tag A the speaker/motor current dips the supply and produced false SOS toggles (each one resets min to 0).
+  if (pressed(sosBtn, now) && !audioBusy() && (int32_t)(now - quietUntilMs) >= 0) setSos(!sos, now);
   // Ignore the touch pad while our own frame plays and QUIET_AFTER_MS after it: on Tag A the speaker
   // drive made the TTP223 fire once per frame (status cycled by itself). Found on hardware, M2.
   if (pressed(touchBtn, now) && !audioBusy() && (int32_t)(now - quietUntilMs) >= 0) {
