@@ -2,17 +2,75 @@
 
 **Hears who you can't see.**
 
+A trapped person's phone, or our small Tag, plays a coded chirp; a station on the ground finds where the sound comes from, turns a thermal camera to look, and shows the rescuer which way to walk and who is most urgent. It is built for search teams after a collapse or in a denied area, where survivors are out of sight and radio and cell networks are down or jammed. Everything runs on the devices themselves, a Raspberry Pi 5, an ESP32 and phone browsers, with no internet, no cell network and no cloud.
+
+Code Metal Forge 2026, Team 31.
+
+## The system in one picture
+
+Sound carries the call from the victim to the station; the station's own Wi-Fi carries the result to the rescuer.
+
+```mermaid
+flowchart LR
+    V[Victim phone, browser beacon]
+    T[Tag, XIAO ESP32S3]
+    R[Relay phone]
+    subgraph Station
+        M[Mic array XVF3800] --> PI[Raspberry Pi 5, Ear server]
+        PI --> H[Pan-tilt head with thermal camera]
+    end
+    O[Operator page, phone or laptop]
+    V -- sound --> M
+    V -- sound --> R
+    R -- sound, one hop on --> M
+    T -- sound --> M
+    PI -- station Wi-Fi HEIMDALL --> O
+```
+
+## Live today
+
+- Chirps from phones and the Tag
+- Direction finding from the 4 raw mics
+- The head that turns by itself to the most urgent victim, and starts straight
+- The thermal picture with warm spots boxed
+- The triage list on the operator page
+- Relay between phones
+
+## Next
+
+- LoRa link to a command post
+- Knock-back to the Tag, and knock sensing at the station (built, cut from the demo)
+- Radar for a silent victim's chest motion
+- Flying the drone
+- Temperatures in degrees C (the thermal picture is brightness only today)
+- Phones relaying the Tag (phones can't decode the Tag's sound yet; the station can)
+
+## Where to look
+
+| Path | What |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | software blocks, the path of one chirp, how the head picks a target, the network |
+| [`docs/HARDWARE.md`](docs/HARDWARE.md) | station block diagram, Tag pinout, servo board pinout and serial commands, calibration |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | the HEIMDALL-AC1 acoustic frame, bands, decoding without machine learning, the three implementations |
+| [`docs/SPEC.md`](docs/SPEC.md) | the contract every part follows: frame, angles, events, serial |
+| [`ear/`](ear/) | the station server (Python, runs on the Pi) |
+| [`web/`](web/) | the phone and operator web app |
+| [`firmware/`](firmware/) | the Tag (`tag/`) and the head controller (`servo_knock/`) |
+| [`modem/`](modem/) | the Python reference modem and the cross-language tests |
+| [`pitch/`](pitch/) | script, Q&A, deck |
+
+## Why the name
+
+In Norse myth Heimdall is the watchman of the gods: he guards the bridge Bifrost, sees a hundred leagues by night and day, and hears grass growing on the earth and wool growing on sheep. Our station does the small human version: it listens for the faintest call and raises the alarm.
+
+---
+
 Victims (phones running our web app, or small ESP32 Tags) play a coded acoustic chirp. The Heimdall station (Raspberry Pi 5 + mic array + thermal camera on a pan-tilt head) finds the chirp's direction and shows it to the drone operator on a phone web app served over the station's own Wi-Fi hotspot.
 
 The contract for every part is [`docs/SPEC.md`](docs/SPEC.md). Read it first. The plan is [`PLAN.md`](PLAN.md).
 
 ## Team
 Namig Mirzayev, Mikael Aznauryan, Erdeni Iles, Giorgi Mumladze
-
-## Git rules
-- One branch per task: `<person>/<TASK>` (e.g. `erdeni/E1-station`).
-- Only commit your own paths.
-- Never commit to `main`. Push your branch; Namig merges.
 
 ## Layout
 ```
@@ -159,3 +217,8 @@ Phones only allow the microphone and motion sensors on HTTPS, and our cert is se
 Android equivalent: download `/ca.crt`, then Settings → Security → Encryption & credentials → Install a certificate → CA certificate.
 
 The certs expire after 30 days; `ear/tools/make_cert.sh --force` makes new ones (phones that installed the CA must reinstall it).
+
+## Working on the repo
+- One branch per task: `<person>/<TASK>` (e.g. `erdeni/E1-station`).
+- Only commit your own paths.
+- Never commit to `main`. Push your branch; Namig merges.
