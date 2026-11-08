@@ -47,3 +47,8 @@ CONFIG = {
 _env = os.environ.get("HEIMDALL_MODULES")
 if _env is not None:
     CONFIG["modules"] = [m.strip() for m in _env.split(",") if m.strip()]
+
+# Relay demo on stage: HEIMDALL_IGNORE_DIRECT=1A2B ear/tools/restart_ear.sh   (see README, Audio)
+_env = os.environ.get("HEIMDALL_IGNORE_DIRECT")
+if _env is not None:
+    CONFIG["audio"]["ignore_direct_ids"] = [v.strip().upper() for v in _env.split(",") if v.strip()]
