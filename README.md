@@ -44,7 +44,7 @@ On a laptop: `pip install fastapi "uvicorn[standard]" numpy opencv-python-headle
 - Modules come from `ear/config.py` (`"modules": ["mock"]`) or env `HEIMDALL_MODULES=mock,thermal`.
 - With `mock` plus a real module (e.g. `mock,thermal`), the mock stops faking that module's events, so you can bring sensors up one at a time.
 - Test one module alone, events printed as JSON lines: `python -m ear.modules.mock`.
-- As a service: see the comments in `ear/tools/heimdall.service` (installed, not enabled; `journalctl -u heimdall -f` for logs).
+- As a service (demo day): `ear/tools/demo_up.sh`, see "Demo day" below (`journalctl -u heimdall -f` for logs).
 
 ### Endpoints (port 8443, HTTPS)
 | Path | What |
@@ -55,6 +55,33 @@ On a laptop: `pip install fastapi "uvicorn[standard]" numpy opencv-python-headle
 | `/thermal.mjpg` | MJPEG, up to 10 fps |
 | `/api/state` | `{"victims": {...}, "last": {type: event}}` |
 | `/ca.crt` | the local CA, to install on a phone (see below) |
+
+## Demo day
+**Start the demo** as the systemd service (survives SSH, restarts after a crash, and with `--boot` comes back by itself after a power cut: measured 51 s from plug-in to the first decoded frame, hotspot included):
+```bash
+ear/tools/demo_up.sh --relay 1429 --bands 0,3 --acc 3 --boot
+```
+- `--relay <id>` is the relay demo switch: the station drops that id's direct (hops-0) frames, so its card only appears when phone C passes it on ("Via relay"). Use the Beacon ID at the top of phone A's page (the script says 1429; a reloaded page can show a new one).
+- `--bands 0,3 --acc 3`: bearings from bands 0 and 3 only, summed over the last 3 frames of an id. Measured on demo morning: bands 1 and 2 put the Tag on the mirror side (−59° for +52°) about one frame in three, bands 0 and 3 never did. Other frames keep the id's last direction.
+- Modules default to `audio,pantilt,thermal`, never the mock (it would put fake data in front of the judges). `--modules audio` for sound only.
+- It prints the module health after 8 s and the phone/operator URLs. Settings go to `~/heimdall.env`, read by the unit.
+- `sudo` without a password for the service commands: once, `sudo install -m 0440 ear/tools/heimdall.sudoers /etc/sudoers.d/heimdall`.
+
+**Back to development runs:** `ear/tools/demo_up.sh --stop` (stops and disables the service), then `ear/tools/restart_ear.sh [modules]` as before. `restart_ear.sh` refuses to start while the service runs, so two Ears never fight over the mic array.
+
+**Relay-only phone (phone C):** `https://10.42.0.1:8443/victim.html?mode=relay`, tap **Start relay**. It listens and relays (two bands up, each id at most once per 30 s) and sends no beacon of its own, so it never shows up as a victim. A normal victim page only listens and relays while its own SOS is on.
+
+**Camera head calibration** (`pantilt` in `ear/config.py`, or per run `demo_up.sh --pan-dir -1 --pan-offset 30`): `pan_dir` is −1 when a positive servo pan turns the camera **left** (the servo mounted the other way round, as on the stage head), `pan_offset_deg` is the bearing the camera looks at with the servo centred (+30 on the stage head, measured 09:20 Sunday). Check it on the operator page: switch to Manual, pan to the Tag's bearing from its card, and the Tag's pile must sit in the middle of the thermal picture. Picture on the wrong side: flip `pan_dir`. Off by a constant: change the offset. Everything the Ear publishes (the dial, `pantilt` events, thermal boxes) stays in bearing degrees; only the number sent to the board changes. **Tape the camera to the servo horn**: every time it is turned by hand, the offset is wrong again.
+
+**Getting in:** `ssh heimdall@heimdall.local` on the venue Wi-Fi (plain `heimdall` only resolves over Tailscale); `ssh heimdall@10.42.0.1` on the HEIMDALL hotspot.
+
+**Honest limits**
+- Direction is weak behind the station (quiet, and reflections win), so bearings more than 95° from the front arrow are dropped as reflections and the id keeps its last direction. Nothing may chirp behind the station on stage.
+- The relay demo ignores one id's direct signal on purpose: the room is small enough for the station to hear everyone.
+- A relayed frame's direction is the relaying phone's, not the victim's. That is why phone C stands next to pile A: phone A's card then points at the right pile.
+- Each band reflects differently off the room. The kept bands are the ones that agreed with the tape marks on demo morning, so a new room means measuring again: the `frame ... raw bearing` lines in the log, two frames per band per pile, within 15° of the truth at both piles.
+- The camera pans ±90° from its zero; a victim further round than that gets the nearest edge. The thermal box's `deg` assumes the camera looks exactly where the head was sent, so it is only as good as the calibration above.
+- After a power cut the phones and the laptop may drift back to the venue Wi-Fi: turn auto-join off for every other network.
 
 ## Module contract
 Every sensor is one file in `ear/modules/`, owned by one person:
@@ -96,11 +123,11 @@ Mount it flat on the mast with the **cable pointing to the back of the station**
 - **Point the phone's speaker (its bottom edge) at the puck.** Facing away, the strongest sound at the puck was a wall reflection: left read −19° instead of −90°; pointed at the puck it read −99.7 ± 0.5.
 - Calibration at 2 m (true → mean ± std, decoded): 0 → +1.4 ± 0.4 (95%), +90 → +86.6 ± 0.9 (95%), +45 → +53.7 ± 1.0 (95%), 180 → about −177 (16%: quiet from behind), −90 → −99.7 ± 0.5 (95%). At 4 m: 0 → 4° off, +90 → +89.5 ± 1.5 (95%).
 
-**Relay demo switch:** on stage the station can hear the victim's phone directly, so to show a relay: `HEIMDALL_IGNORE_DIRECT=1A2B ear/tools/restart_ear.sh`. The station drops 1A2B's **hops-0** frames (one log line each) and shows the relayed copy as "1A2B (via relay)". Turn it off with a plain `ear/tools/restart_ear.sh`. Permanent version: `audio.ignore_direct_ids` in `ear/config.py`.
+**Relay demo switch:** on stage the station can hear the victim's phone directly, so to show a relay: `HEIMDALL_IGNORE_DIRECT=1A2B ear/tools/restart_ear.sh`. The station drops 1A2B's **hops-0** frames (one log line each) and shows the relayed copy as "1A2B (via relay)". Turn it off with a plain `ear/tools/restart_ear.sh`. Permanent version: `audio.ignore_direct_ids` in `ear/config.py`. As the service: `ear/tools/demo_up.sh --relay 1A2B` (see "Demo day").
 
 **Rules it follows:** a new id is `confirmed: false` until a second frame within 60 s, then stays confirmed; an unconfirmed id is dropped after 60 s (SPEC 1.7.6). One record per id: a relayed copy only refreshes "last heard" if a direct frame came in the last 30 s. Relayed frames publish **no `bearing`** (their direction is the relaying phone's, not the victim's), so auto-aim never points at a relay. A phone's `heard` report becomes a victim with `deg: null` if the station hasn't heard that id itself in 30 s. `noise` = mean power per band of the decode channel's last second (raw mic, so levels are low: about −70 to −100 dBFS in a quiet room).
 
-**Restart the Ear** (always this way, so pkill can't hit your own SSH session): `ear/tools/restart_ear.sh [modules]` (default `mock,audio`, log `~/ear.log`).
+**Restart the Ear** (always this way, so pkill can't hit your own SSH session): `ear/tools/restart_ear.sh [modules]` (default `mock,audio`, log `~/ear.log`). While the demo service runs it refuses; `ear/tools/demo_up.sh --stop` first.
 
 ## Field network
 - The Pi runs Wi-Fi hotspot **`HEIMDALL`**, password **`heimdallforge26`**, Pi at **`10.42.0.1`**.

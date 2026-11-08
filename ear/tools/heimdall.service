@@ -15,7 +15,8 @@ Group=heimdall
 SupplementaryGroups=i2c spi gpio dialout video audio plugdev
 WorkingDirectory=/home/heimdall/Team-31
 Environment=PYTHONUNBUFFERED=1
-# Settings: ~/heimdall.env (written by ear/tools/demo_up.sh): HEIMDALL_MODULES, HEIMDALL_IGNORE_DIRECT, HEIMDALL_DOA_ACCUMULATE
+# Settings: ~/heimdall.env (written by ear/tools/demo_up.sh): HEIMDALL_MODULES, HEIMDALL_IGNORE_DIRECT,
+# HEIMDALL_DOA_ACCUMULATE, HEIMDALL_DOA_BANDS, HEIMDALL_PAN_DIR, HEIMDALL_PAN_OFFSET (empty = the value in ear/config.py)
 EnvironmentFile=-/home/heimdall/heimdall.env
 ExecStart=/home/heimdall/heimdall-venv/bin/python -m ear.main
 Restart=always
