@@ -482,6 +482,11 @@ def handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore
                     deg, conf, used = acc.add((vid, hops), now, sc, offset)
                     log.info("frame %s band %d raw bearing %+.1f (conf %.2f) -> %+.1f over %d frames", vid, fr.band,
                              raw, conf1, deg, used)
+                    if behind(deg, front):
+                        # this frame points ahead, but the sum still holds older echoes and points behind: same rule
+                        log.info("frame %s band %d bearing over %d frames %+.1f is behind the station: dropped, "
+                                 "keeping the last direction", vid, fr.band, used, deg)
+                        deg = conf = raw = None
             if deg is None and raw is not None:
                 log.info("frame %s band %d raw bearing %+.1f is behind the station: dropped, keeping the last direction",
                          vid, fr.band, raw)
