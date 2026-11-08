@@ -23,7 +23,8 @@ while [ $# -gt 0 ]; do
     --pan-offset) PAN_OFF="${2:?--pan-offset needs degrees, e.g. 30}"; shift 2 ;;
     --modules) MODS="${2:?--modules needs a list}"; shift 2 ;;
     --boot) BOOT=1; shift ;;
-    --stop) sudo systemctl disable --now heimdall 2>/dev/null; echo "service stopped and disabled; use ear/tools/restart_ear.sh for dev runs"; exit 0 ;;
+    --stop) if sudo systemctl disable --now heimdall; then echo "service stopped and disabled; use ear/tools/restart_ear.sh for dev runs"; exit 0
+            else echo "FAILED to stop the service (sudo? install ear/tools/heimdall.sudoers; or it was never installed)"; exit 1; fi ;;
     *) echo "unknown option $1 (see the top of this file)"; exit 2 ;;
   esac
 done
@@ -48,8 +49,11 @@ echo "settings (~/heimdall.env): modules=$MODS relay=${RELAY:-off} acc=$ACC band
 
 # 3. install the unit if it changed, stop manual runs, (re)start the service
 if ! cmp -s ear/tools/heimdall.service /etc/systemd/system/heimdall.service; then
-  sudo cp "$PWD/ear/tools/heimdall.service" /etc/systemd/system/heimdall.service && sudo systemctl daemon-reload
-  echo "installed ear/tools/heimdall.service"
+  if sudo cp "$PWD/ear/tools/heimdall.service" /etc/systemd/system/heimdall.service && sudo systemctl daemon-reload; then
+    echo "installed ear/tools/heimdall.service"
+  else
+    echo "FAILED to install the unit (sudo? install ear/tools/heimdall.sudoers); the old unit stays"; exit 1
+  fi
 fi
 PAT='[p]ython -m ear.main'
 if ! systemctl is-active --quiet heimdall && pgrep -f "$PAT" >/dev/null; then
@@ -57,7 +61,7 @@ if ! systemctl is-active --quiet heimdall && pgrep -f "$PAT" >/dev/null; then
   pkill -f "$PAT"; for _ in $(seq 1 50); do pgrep -f "$PAT" >/dev/null || break; sleep 0.1; done
   pgrep -f "$PAT" >/dev/null && pkill -9 -f "$PAT"
 fi
-sudo systemctl restart heimdall
+sudo systemctl restart heimdall || { echo "FAILED: systemctl restart heimdall (sudo? install ear/tools/heimdall.sudoers)"; exit 1; }
 if [ "$BOOT" = 1 ]; then
   sudo systemctl enable heimdall >/dev/null 2>&1 && echo "service enabled at boot"
 elif systemctl is-enabled --quiet heimdall 2>/dev/null; then

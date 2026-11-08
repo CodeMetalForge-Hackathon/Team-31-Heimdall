@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Talk to the Heimdall servo+knock Seeeduino (docs/SPEC.md section 4).
   python servo_cli.py            interactive: type P 30 10, R 0 90, ?, PING  (Ctrl-C quits)
-  python servo_cli.py sweep      pan -60..60, tilt -20..40, then center
+  python servo_cli.py sweep      pan -60..60, tilt -20..25 (the station's clearance), then center
   python servo_cli.py listen     print everything the board says for 60 s (KNOCK lines)
   python servo_cli.py --port /dev/ttyUSB0 sweep
 """
@@ -77,7 +77,7 @@ def main():
     send(s, "PING"); time.sleep(0.3)
     try:
         if mode == "sweep":
-            for p, t in [(0, 0), (-60, 0), (60, 0), (0, 0), (0, -20), (0, 40), (0, 0)]:
+            for p, t in [(0, 0), (-60, 0), (60, 0), (0, 0), (0, -20), (0, 25), (0, 0)]:
                 send(s, f"P {p} {t}"); time.sleep(1.5)
         elif mode == "listen":
             time.sleep(60)
