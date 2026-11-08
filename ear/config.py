@@ -15,7 +15,11 @@ CONFIG = {
     "restart_delay_s": 3.0,
 
     # per-module settings (placeholders until the hardware is wired)
-    "pantilt": {"port": "auto", "pan_center_raw": 90, "tilt_level_raw": 90},
+    "pantilt": {"port": "auto", "pan_center_raw": 90, "tilt_level_raw": 90,
+                # Measured 2026-11-08 on the stage head (thermal frames at servo -62/0/+62 + video): a positive servo pan
+                # turns this camera LEFT, and with the servo centred it looks 30 deg right of the mic array's front arrow.
+                "pan_dir": -1,           # -1 if a positive servo pan turns the camera LEFT (servo mounted the other way round)
+                "pan_offset_deg": 30.0},  # bearing the camera looks at with the pan servo centred (its zero vs the mic front arrow)
     "thermal": {"device": "auto"},
     "audio": {
         "device": "auto",            # sounddevice name or index; "auto" = first input whose name has XVF3800/reSpeaker
@@ -68,6 +72,14 @@ if _env:
 _env = os.environ.get("HEIMDALL_DOA_FRONT")
 if _env:
     CONFIG["audio"]["doa_front_deg"] = float(_env)
+
+# Camera head mount (N11): HEIMDALL_PAN_DIR=-1 (a positive servo pan turns the camera left), HEIMDALL_PAN_OFFSET=30
+_env = os.environ.get("HEIMDALL_PAN_DIR")
+if _env:
+    CONFIG["pantilt"]["pan_dir"] = -1 if int(_env) < 0 else 1
+_env = os.environ.get("HEIMDALL_PAN_OFFSET")
+if _env:
+    CONFIG["pantilt"]["pan_offset_deg"] = float(_env)
 
 # Bands that give bearings (N7): HEIMDALL_DOA_BANDS=1,2 ; empty = all four
 _env = os.environ.get("HEIMDALL_DOA_BANDS")

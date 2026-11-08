@@ -83,3 +83,31 @@ def test_just_stopped_moving_beats_more_minutes():
     a.on_victim({"id": "1429", "status": "injured", "motion": False, "minutes": 16, "deg": -27.0, "ts": t + 340})
     a.on_victim({"id": "A001", "status": "injured", "motion": False, "minutes": 7, "deg": 27.0, "ts": t + 340})
     assert a.target(t + 345)[2] == "victim 1429", "5 min after it stopped, it's just still: minutes decide again"
+
+
+def test_servo_pan_direction_and_offset():
+    # This mount: the camera looks at +30 with the servo centred, and a positive servo pan turns it LEFT.
+    cfg = {**pantilt.DEFAULTS, "pan_dir": -1, "pan_offset_deg": 30.0}
+    assert pantilt.servo_pan(cfg, 62) == -32 and pantilt.servo_pan(cfg, 0) == 30 and pantilt.servo_pan(cfg, -35) == 65
+    assert pantilt.servo_pan(cfg, -89) == 90, "clamped to the servo's range"
+    assert pantilt.servo_pan(pantilt.DEFAULTS, 62) == 62, "defaults: the board gets the bearing as it is"
+
+
+def test_reversed_servo_mount_still_aims_at_the_victim():
+    port, got = fake_board()
+    pantilt._shared.update(aimer=None, park=None)
+    bus = Bus()
+    cfg = {"port": port, "hold_s": 0.2, "pan_dir": -1, "pan_offset_deg": 30.0}
+    threading.Thread(target=pantilt.run, args=(bus, cfg), daemon=True).start()
+    time.sleep(1.0)
+    assert moves(got) == ["P 30 0"], "straight ahead is servo +30 on this mount"
+
+    bus.publish({"t": "victim", "id": "A001", "status": "ok", "motion": False, "minutes": 3,
+                 "deg": 62.0, "confirmed": True, "ts": time.time()})
+    time.sleep(0.6)
+    assert moves(got)[-1] == "P -32 0", "the Tag at +62 needs servo -32"
+    assert bus.snapshot()["last"]["pantilt"]["pan"] == 62.0, "events stay in bearing degrees (dial, thermal boxes)"
+
+    pantilt._park_at_exit()
+    time.sleep(0.3)
+    assert moves(got)[-1] == "P 30 0", "parking is straight ahead, not servo 0"

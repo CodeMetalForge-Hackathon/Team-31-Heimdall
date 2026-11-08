@@ -31,6 +31,8 @@ DEFAULTS = {
     "hold_s": 1.5,        # auto mode: at least this long between moves
     "fresh_s": 30.0,      # victims / bearings older than this are not aimed at
     "status_s": 2.0,      # publish a pantilt event at least this often
+    "pan_dir": 1,         # -1 if a positive servo pan turns the camera LEFT (servo mounted the other way round)
+    "pan_offset_deg": 0.0,  # bearing the camera looks at with the pan servo centred (its zero vs the mic front arrow)
 }
 PAN_MIN, PAN_MAX = -90, 90
 TILT_MIN, TILT_MAX = -30, 25
@@ -41,6 +43,13 @@ STOP_WINDOW_S = 300   # someone who stopped moving in the last 5 min outranks ev
 
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
+
+
+def servo_pan(cfg, pan):
+    """The pan to send to the board so the camera looks at `pan` (bearing degrees, + = right of the front arrow).
+    The camera's zero is pan_offset_deg off the mic array's front arrow, and pan_dir is -1 when the servo is
+    mounted so that a positive pan turns it left. Everything else (events, the dial, thermal boxes) stays in bearing degrees."""
+    return clamp(int(round(cfg["pan_dir"] * (pan - cfg["pan_offset_deg"]))), PAN_MIN, PAN_MAX)
 
 
 class Aimer:
@@ -186,7 +195,7 @@ def run(bus, cfg: dict) -> None:
                 return
             state["parked"] = True
             try:
-                s.write(("P %d %d\n" % HOME).encode())
+                s.write(("P %d %d\n" % (servo_pan(cfg, HOME[0]), HOME[1])).encode())
                 s.flush()                  # the board finishes the move after we're gone
                 log.info("parked: head straight (pan %d tilt %d)", *HOME)
             except Exception:              # board already gone: nothing to park
@@ -215,8 +224,9 @@ def run(bus, cfg: dict) -> None:
 
     threading.Thread(target=reader, daemon=True, name="pantilt-reader").start()
 
-    send("P %d %d" % HOME)                 # start straight, not where the last run left the head
-    log.info("start: head straight (pan %d tilt %d)", *HOME)
+    send("P %d %d" % (servo_pan(cfg, HOME[0]), HOME[1]))   # start straight, not where the last run left the head
+    log.info("start: head straight (pan %d tilt %d; servo %d: pan_dir %d, offset %+.0f)", *HOME,
+             servo_pan(cfg, HOME[0]), cfg["pan_dir"], cfg["pan_offset_deg"])
     last_sent, last_move, last_status = HOME, time.time(), 0.0
     try:
         while True:
@@ -235,9 +245,10 @@ def run(bus, cfg: dict) -> None:
                             or abs(pan - last_sent[0]) >= cfg["min_move_deg"]
                             or abs(tilt - last_sent[1]) >= 2) and now - last_move >= cfg["hold_s"]
                 if move:
-                    send(f"P {pan} {tilt}")
+                    sp = servo_pan(cfg, pan)
+                    send(f"P {sp} {tilt}")
                     last_sent, last_move = (pan, tilt), now
-                    log.info("aim pan %d tilt %d (%s)", pan, tilt, why)
+                    log.info("aim pan %d tilt %d (%s) -> servo %d", pan, tilt, why, sp)
                     last_status = 0.0   # publish right away
             if now - last_status >= cfg["status_s"]:
                 pan, tilt = last_sent or (0, 0)
