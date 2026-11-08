@@ -1,6 +1,22 @@
 """Ear configuration. One dict. Override the module list with env HEIMDALL_MODULES=mock,thermal."""
+import logging
 import os
 from pathlib import Path
+
+
+def _env_num(name, conv, default):
+    """A numeric env override, or `default` (with one log line) when the value doesn't parse:
+    a typo in ~/heimdall.env must not crash-loop the service at import."""
+    v = os.environ.get(name)
+    if not v:
+        return default
+    try:
+        return conv(v)
+    except ValueError:
+        logging.getLogger("config").error("bad %s=%r, keeping %r", name, v, default)
+        return default
+
+
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -64,24 +80,15 @@ if _env is not None:
     CONFIG["audio"]["ignore_direct_ids"] = [v.strip().upper() for v in _env.split(",") if v.strip()]
 
 # Bearing smoothing (N6): HEIMDALL_DOA_ACCUMULATE=4 sums the last 4 frames' score curves per id; 1 = off
-_env = os.environ.get("HEIMDALL_DOA_ACCUMULATE")
-if _env:
-    CONFIG["audio"]["doa_accumulate"] = max(1, int(_env))
+CONFIG["audio"]["doa_accumulate"] = max(1, _env_num("HEIMDALL_DOA_ACCUMULATE", int, CONFIG["audio"]["doa_accumulate"]))
 
 # Front-only bearings (N11): HEIMDALL_DOA_FRONT=95 ; 0 = take bearings from all around
-_env = os.environ.get("HEIMDALL_DOA_FRONT")
-if _env:
-    CONFIG["audio"]["doa_front_deg"] = float(_env)
+CONFIG["audio"]["doa_front_deg"] = _env_num("HEIMDALL_DOA_FRONT", float, CONFIG["audio"]["doa_front_deg"])
 
 # Camera head mount (N11): HEIMDALL_PAN_DIR=-1 (a positive servo pan turns the camera left), HEIMDALL_PAN_OFFSET=30
-_env = os.environ.get("HEIMDALL_PAN_DIR")
-if _env:
-    CONFIG["pantilt"]["pan_dir"] = -1 if int(_env) < 0 else 1
-_env = os.environ.get("HEIMDALL_PAN_OFFSET")
-if _env:
-    CONFIG["pantilt"]["pan_offset_deg"] = float(_env)
+CONFIG["pantilt"]["pan_dir"] = -1 if _env_num("HEIMDALL_PAN_DIR", int, CONFIG["pantilt"]["pan_dir"]) < 0 else 1
+CONFIG["pantilt"]["pan_offset_deg"] = _env_num("HEIMDALL_PAN_OFFSET", float, CONFIG["pantilt"]["pan_offset_deg"])
 
 # Bands that give bearings (N7): HEIMDALL_DOA_BANDS=1,2 ; empty = all four
-_env = os.environ.get("HEIMDALL_DOA_BANDS")
-if _env:
-    CONFIG["audio"]["doa_bands"] = [int(b) for b in _env.split(",") if b.strip()]
+CONFIG["audio"]["doa_bands"] = _env_num("HEIMDALL_DOA_BANDS", lambda s: [int(b) for b in s.split(",") if b.strip()],
+                                        CONFIG["audio"]["doa_bands"])

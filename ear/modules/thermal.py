@@ -182,8 +182,8 @@ def run(bus, cfg: dict) -> None:
     cfg = {**DEFAULTS, **(cfg or {})}
     cap, idx, raw = open_camera(cfg["device"])
     if cap is None:
-        log.warning("no thermal camera delivered a frame: thermal off (operator page shows the phone-app fallback)")
-        return
+        # raise, not return: the supervisor then looks again in 3 s (after a power cut the camera may not be ready yet)
+        raise RuntimeError("no thermal camera delivered a frame (unplugged, or not ready yet)")
     if not _shared["subscribed"]:
         bus.subscribe("pantilt", _on_pantilt)
         _shared["subscribed"] = True

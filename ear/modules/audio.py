@@ -331,6 +331,9 @@ def _decode_channel(cfg):
     return ASR_CHANNEL if ch == "asr" else int(ch)
 
 
+_shared = {"tracker": None, "subscribed": False}   # one Tracker + one heard subscription, even if run() is restarted
+
+
 def run(bus, cfg: dict, capture=None) -> None:
     fs = int(cfg.get("fs", 16000))
     if capture is None:
@@ -363,7 +366,10 @@ def run(bus, cfg: dict, capture=None) -> None:
     log.info("decoding ch%d, bearing window %s, raw mics %s, offset %+.1f deg%s", dch, window, raw_chans, offset,
              f", ignoring direct frames from {sorted(ignore)}" if ignore else "")
 
-    tracker = Tracker(bus, cfg)
+    tracker = _shared["tracker"]          # a restarted run() keeps the records (confirmed, last direction) and
+    if tracker is None:                    # must not add a second heard subscriber bound to a dead tracker
+        tracker = _shared["tracker"] = Tracker(bus, cfg)
+    tracker.bus = bus
     doa_bands = {int(b) for b in cfg.get("doa_bands", (0, 1, 2, 3))}
     if doa_bands != {0, 1, 2, 3}:
         log.info("bearings only from bands %s (doa_bands); other frames keep the last direction", sorted(doa_bands))
@@ -388,7 +394,9 @@ def run(bus, cfg: dict, capture=None) -> None:
             log.info("heard report %s via %s -> victim (deg %s, hops %s, confirmed=%s)", vid, ev.get("via"),
                      out.get("deg"), out.get("hops"), out["confirmed"])
 
-    bus.subscribe("heard", on_heard)
+    if not _shared["subscribed"]:
+        bus.subscribe("heard", on_heard)
+        _shared["subscribed"] = True
 
     dec = Decoder(fs)
     base = 0                      # absolute sample index of the decoder's sample 0

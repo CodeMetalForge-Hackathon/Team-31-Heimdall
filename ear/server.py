@@ -103,7 +103,7 @@ def build_app(bus, cfg) -> FastAPI:
         snap = bus.snapshot()
         initial = list(snap["victims"].values())
         initial += [e for t, e in snap["last"].items() if t != "victim"]
-        initial.sort(key=lambda e: e.get("ts", 0))
+        initial.sort(key=lambda e: e["ts"] if isinstance(e.get("ts"), (int, float)) else 0.0)
 
         async def sender():
             for e in initial:
@@ -119,9 +119,10 @@ def build_app(bus, cfg) -> FastAPI:
                 except ValueError:
                     log.warning("ws %s sent non-JSON: %.80s", peer, text)
                     continue
-                if not isinstance(msg, dict) or "t" not in msg:
-                    log.warning("ws %s sent message without 't': %.80s", peer, text)
+                if not isinstance(msg, dict) or not isinstance(msg.get("t"), str):
+                    log.warning("ws %s sent message without a string 't': %.80s", peer, text)
                     continue
+                msg["ts"] = time.time()      # server clock: the snapshot sorts on ts, so a client's value is never trusted
                 bus.publish(msg)
 
         tasks = [asyncio.create_task(sender()), asyncio.create_task(receiver())]

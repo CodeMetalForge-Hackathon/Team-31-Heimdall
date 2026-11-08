@@ -29,7 +29,8 @@ DEFAULTS = {
     "min_conf": 0.3,      # ignore bearings less confident than this
     "min_move_deg": 4,    # auto mode: don't re-aim for a smaller change (less servo noise near the mics)
     "hold_s": 1.5,        # auto mode: at least this long between moves
-    "fresh_s": 30.0,      # victims / bearings older than this are not aimed at
+    "fresh_s": 90.0,      # victims / bearings older than this are not aimed at. = audio.report_hold_s: a relayed phone
+                          # gets a direction only every 32-42 s (relay hold-off), and 90 survives one missed relay
     "status_s": 2.0,      # publish a pantilt event at least this often
     "pan_dir": 1,         # -1 if a positive servo pan turns the camera LEFT (servo mounted the other way round)
     "pan_offset_deg": 0.0,  # bearing the camera looks at with the pan servo centred (its zero vs the mic front arrow)
@@ -174,8 +175,8 @@ def run(bus, cfg: dict) -> None:
     cfg = {**DEFAULTS, **(cfg or {})}
     s = open_board(cfg["port"], cfg["baud"])
     if s is None:
-        log.warning("no servo board found (Seeeduino unplugged?): pantilt off")
-        return
+        # raise, not return: the supervisor then looks again in 3 s (after a power cut the USB may not be enumerated yet)
+        raise RuntimeError("no servo board found (Seeeduino unplugged, or not enumerated yet)")
     aimer = _shared["aimer"]
     if aimer is None:
         aimer = _shared["aimer"] = Aimer(cfg)
@@ -236,7 +237,11 @@ def run(bus, cfg: dict) -> None:
             if state["error"] is not None:
                 raise RuntimeError(f"servo board lost: {state['error']}")
             if state["reset"]:
-                state["reset"], last_sent = False, None
+                # the board rebooted and sits at servo 0, which is not bearing 0 on an offset mount: re-home, then re-aim
+                state["reset"] = False
+                send("P %d %d" % (servo_pan(cfg, HOME[0]), HOME[1]))
+                last_sent, last_move, last_status = HOME, 0.0, 0.0
+                aimer.current = HOME
             now = time.time()
             tgt = aimer.target(now)
             if tgt is not None:
