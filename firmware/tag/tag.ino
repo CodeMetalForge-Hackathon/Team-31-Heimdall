@@ -279,7 +279,9 @@ void loop() {
   }
 
   if (pressed(sosBtn, now)) setSos(!sos, now);
-  if (pressed(touchBtn, now)) {
+  // Ignore the touch pad while our own frame plays and QUIET_AFTER_MS after it: on Tag A the speaker
+  // drive made the TTP223 fire once per frame (status cycled by itself). Found on hardware, M2.
+  if (pressed(touchBtn, now) && !audioBusy() && (int32_t)(now - quietUntilMs) >= 0) {
     tagStatus = (tagStatus + 1) & 3;     // ok -> injured -> critical -> no_response -> ok
     buzz(tagStatus == hac1::NO_RESPONSE ? 1 : tagStatus, tagStatus == hac1::NO_RESPONSE ? 600 : 150);
     Serial.printf("BTN STATUS %s\n", statusName(tagStatus));
