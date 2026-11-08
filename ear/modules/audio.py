@@ -23,6 +23,7 @@ ARRAY_NAMES = ("xvf3800", "respeaker")
 ASR_CHANNEL = 1
 BAND_MARGIN_HZ = 200.0
 UPSAMPLE = 16
+PHAT_BETA = 0.7
 STALL_S = 3.0
 
 
@@ -164,10 +165,12 @@ def pair_distances(xy):
     return {(i, j): float(np.hypot(*(xy[i] - xy[j]))) for i in range(n) for j in range(i + 1, n)}
 
 
-def estimate_bearing(x4, band, fs, mic_xy, c=343.0, offset_deg=0.0, upsample=UPSAMPLE):
+def estimate_bearing(x4, band, fs, mic_xy, c=343.0, offset_deg=0.0, upsample=UPSAMPLE, beta=PHAT_BETA):
     """GCC-PHAT bearing of a source in `band` from raw mic signals.
 
     x4: (n_samples, n_mics), columns in the same order as the rows of mic_xy ((n_mics, 2), meters).
+    beta: PHAT exponent (1 = full PHAT). 0.7 picked from the 2 m / 4 m calibration recordings: full
+    whitening lets reverb pick a neighbouring cycle of the ~3 kHz carrier on some pairs.
     -> (deg, conf): bearing clockwise from +x (SPEC 2) in -180..180, conf 0..1."""
     x = np.asarray(x4, dtype=np.float64)
     p = np.asarray(mic_xy, dtype=np.float64)
@@ -182,7 +185,7 @@ def estimate_bearing(x4, band, fs, mic_xy, c=343.0, offset_deg=0.0, upsample=UPS
 
     pairs = [(i, j) for i in range(m) for j in range(i + 1, m)]
     G = np.stack([Xb[:, i] * np.conj(Xb[:, j]) for i, j in pairs], axis=1)
-    G /= np.abs(G) + 1e-12                                       # PHAT weighting
+    G /= np.abs(G) ** beta + 1e-12                               # (partial) PHAT weighting
     # Correlation on a lag grid 1/(upsample*fs) wide = the zero-padded (upsample x) inverse FFT,
     # evaluated only at the lags a pair this close can produce.
     max_tau = max(np.hypot(*(p[i] - p[j])) for i, j in pairs) / c
@@ -315,6 +318,7 @@ def run(bus, cfg: dict, capture=None) -> None:
                     "Flash the 6-channel firmware (README, Audio). Decoding the ASR channel.", channels)
         dch = ASR_CHANNEL
     window = cfg.get("doa_window", "preamble")
+    beta = float(cfg.get("phat_beta", PHAT_BETA))
     c = float(cfg.get("speed_of_sound", 343.0))
     offset = float(cfg.get("bearing_offset_deg", 0.0))
     ignore = {str(v).upper() for v in cfg.get("ignore_direct_ids", [])}
@@ -348,7 +352,7 @@ def run(bus, cfg: dict, capture=None) -> None:
     def frames_out(frames, now):
         for fr in frames:
             handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs,
-                         doa_ok, now)
+                         doa_ok, now, beta)
 
     with capture:
         while True:
@@ -398,7 +402,7 @@ def run(bus, cfg: dict, capture=None) -> None:
 
 
 def handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore, tracker, bus, cpu, fs, doa_ok,
-                 now):
+                 now, beta=PHAT_BETA):
     f = fr.fields
     vid, hops = f["id"], f.get("hops", 0)
     if hops == 0 and vid in ignore:
@@ -412,7 +416,7 @@ def handle_frame(fr, base, capture, raw_chans, mic_xy, window, c, offset, ignore
             log.warning("frame %s: bearing window no longer in the ring", vid)
         else:
             t0 = time.thread_time()
-            deg, conf = estimate_bearing(x[:, raw_chans], fr.band, fs, mic_xy, c, offset)
+            deg, conf = estimate_bearing(x[:, raw_chans], fr.band, fs, mic_xy, c, offset, beta=beta)
             cpu["doa"] += time.thread_time() - t0
     if deg is not None and hops == 0:
         # A relayed frame's direction is the relaying phone's, not the victim's: no bearing event for it.

@@ -150,7 +150,7 @@ def handle(name, frames, cap, chans, xy, c, offset, fs, res, ids):
             if x is None:
                 out.append(f"{w} -")
                 continue
-            deg, conf = estimate_bearing(x[:, chans], fr.band, fs, xy, c, offset)
+            deg, conf = estimate_bearing(x[:, chans], fr.band, fs, xy, c, offset, beta=CONFIG["audio"]["phat_beta"])
             res[(name, w)].append((deg, conf))
             out.append(f"{w} {deg:+7.1f} ({conf:.2f})")
         ids[name].append(fr.fields["id"])

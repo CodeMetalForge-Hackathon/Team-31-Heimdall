@@ -23,8 +23,8 @@ CONFIG = {
         "channels": 6,               # 6-ch firmware: ch0 conference, ch1 ASR, ch2-5 raw mics 0-3
         "blocksize": 1024,
         "ring_s": 8.0,               # seconds of all channels kept for the bearing windows
-        "decode_channel": 2,         # channel fed to the decoder: 2..5 = a raw mic, "asr" = ch1 (processed)
-        "doa_window": "preamble",    # "preamble" = the 200 ms preamble, "frame" = preamble start .. frame end
+        "decode_channel": 2,         # 2..5 = a raw mic, "asr" = ch1. A/B at 2-4 m: raw 87-96% decoded, asr 29-48%
+        "doa_window": "preamble",    # "preamble" (200 ms) or "frame" (2.13 s); preamble won the A/B (74% vs 68% within 15 deg)
         # Mic openings (x, y) in meters, keyed by raw channel. Origin = array center, +x = front arrow
         # (12 o'clock, opposite the USB cable), +y = right (SPEC 2). Measured: 6.65 cm square, 9.35 cm diagonal.
         "mic_xy": {4: (0.03325, -0.03325),    # 10:30 front-left
@@ -32,6 +32,7 @@ CONFIG = {
                    2: (-0.03325, 0.03325),    # 4:30 back-right
                    3: (-0.03325, -0.03325)},  # 7:30 back-left
         "speed_of_sound": 343.0,     # m/s
+        "phat_beta": 0.7,            # GCC-PHAT whitening exponent (1 = full PHAT); 0.7 won on the calibration set
         "bearing_offset_deg": 0.0,   # added to every bearing so "ahead" reads 0 (calibration)
         "quiet_db": -55.0,           # noise.quiet = every band below this (dBFS)
         "confirm_s": 60.0,           # a new id needs a 2nd frame within this to be confirmed (SPEC 1.7.6)
