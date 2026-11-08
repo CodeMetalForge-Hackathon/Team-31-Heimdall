@@ -3,18 +3,21 @@
 #   ear/tools/demo_up.sh                      audio,pantilt,thermal, no mock, no relay trick
 #   ear/tools/demo_up.sh --relay A001         relay demo: ignore A001's direct frames (only relays get through)
 #   ear/tools/demo_up.sh --acc 4              bearing = sum of the last 4 frames per id (N6 smoothing)
+#   ear/tools/demo_up.sh --bands 1,2          bearings only from these bands; other frames keep the last one (N7)
 #   ear/tools/demo_up.sh --modules audio      other module list
 #   ear/tools/demo_up.sh --boot               also enable the service at boot (power-cut proof)
 #   ear/tools/demo_up.sh --stop               stop the service (and disable boot start); back to restart_ear.sh
 # NO mock in the demo: it would put fake radar/drone/heading data in front of the judges.
 # Settings go to ~/heimdall.env, which heimdall.service reads (EnvironmentFile).
+# No password prompts: install ear/tools/heimdall.sudoers once (instructions inside it).
 set -u
 cd "$(dirname "$0")/../.."
-MODS="audio,pantilt,thermal" RELAY="" ACC="1" BOOT=0
+MODS="audio,pantilt,thermal" RELAY="" ACC="1" BANDS="" BOOT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --relay) RELAY="${2:?--relay needs an id, e.g. A001}"; shift 2 ;;
     --acc) ACC="${2:?--acc needs a number}"; shift 2 ;;
+    --bands) BANDS="${2:?--bands needs a list, e.g. 1,2}"; shift 2 ;;
     --modules) MODS="${2:?--modules needs a list}"; shift 2 ;;
     --boot) BOOT=1; shift ;;
     --stop) sudo systemctl disable --now heimdall 2>/dev/null; echo "service stopped and disabled; use ear/tools/restart_ear.sh for dev runs"; exit 0 ;;
@@ -34,12 +37,13 @@ cat > ~/heimdall.env <<EOF
 HEIMDALL_MODULES=$MODS
 HEIMDALL_IGNORE_DIRECT=$RELAY
 HEIMDALL_DOA_ACCUMULATE=$ACC
+HEIMDALL_DOA_BANDS=$BANDS
 EOF
-echo "settings (~/heimdall.env): modules=$MODS relay=${RELAY:-off} acc=$ACC"
+echo "settings (~/heimdall.env): modules=$MODS relay=${RELAY:-off} acc=$ACC bands=${BANDS:-all}"
 
 # 3. install the unit if it changed, stop manual runs, (re)start the service
 if ! cmp -s ear/tools/heimdall.service /etc/systemd/system/heimdall.service; then
-  sudo cp ear/tools/heimdall.service /etc/systemd/system/heimdall.service && sudo systemctl daemon-reload
+  sudo cp "$PWD/ear/tools/heimdall.service" /etc/systemd/system/heimdall.service && sudo systemctl daemon-reload
   echo "installed ear/tools/heimdall.service"
 fi
 PAT='[p]ython -m ear.main'
