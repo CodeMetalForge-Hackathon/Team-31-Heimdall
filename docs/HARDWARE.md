@@ -28,6 +28,20 @@ flowchart TB
 | Head | two servos, pan −90 to +90, tilt −30 to +60 at the board; the Ear sends tilt −30 to +25 | `servo_knock.ino`, `pantilt.py` |
 | Knock sensor | SW-420 on the servo board; built, not in the demo | `servo_knock.ino` |
 
+### The station as built
+
+The prototype rides on a cardboard carrier with a hand strap, so one rescuer carries it on the back of the hand and the other hand stays free. Seen from above: the reSpeaker XVF3800 mic array (the black puck with the LED ring) and the Raspberry Pi 5 in its case along the bottom edge, the red Seeeduino at the top, the pan-tilt servos on the right, a breadboard between them, and the ALFA USB Wi-Fi adapter in the Pi. The SW-420 knock sensor is the small Grove board on its own pad at the top left, at the end of a long lead.
+
+![Station from above: mic array and Pi 5 at the bottom, Seeeduino at the top, pan-tilt servos at the right, knock sensor on its own pad at top left](photos/station-top.jpg)
+
+From the side, with the thermal camera on top of the pan-tilt head and the knock pad on the table at the end of its lead.
+
+![Station from the side, carried on the hand: thermal camera on the pan-tilt head, Pi 5 and mic array behind it, knock pad on the table](photos/station-side.jpg)
+
+The same board from another angle, showing the servo bracket and how the Seeeduino, breadboard and servos are wired.
+
+![Station from above, second angle](photos/station-top-2.jpg)
+
 ## Tag
 
 Board: Seeed XIAO ESP32S3 Plus (`tag.ino` line 2) with Grove modules. It plays the same HEIMDALL-AC1 frame as a phone, every 8 s plus or minus 1 s, id `A001`.
@@ -52,6 +66,10 @@ flowchart LR
     X -- D4 SDA, D5 SCL --> IMU[ISM330DHCX IMU, 0x6B]
     X -. D8, D9, D10, Plan B .-> I2S[MAX98357A I2S amplifier]
 ```
+
+The Tag as built, on its own carrier with a hand strap: the XIAO ESP32S3 and the red SparkFun ISM330DHCX IMU on the breadboard in the middle, and the four Grove modules the firmware reads and drives around it: speaker at the top right, SOS button on the left, touch pad at the bottom left, vibration motor at the bottom right.
+
+![Tag on its carrier: XIAO and IMU on a breadboard, Grove speaker, button, touch pad and vibration motor around it](photos/tag.jpg)
 
 What the firmware does with them (`tag.ino`):
 

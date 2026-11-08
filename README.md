@@ -27,6 +27,16 @@ flowchart LR
     PI -- station Wi-Fi HEIMDALL --> O
 ```
 
+## The real thing
+
+The station prototype, carried on the back of the hand: mic array and Raspberry Pi 5 at the back, the thermal camera on its pan-tilt head in front, the Seeeduino that drives the head on the left. The knock sensor lies on the table at the end of its lead.
+
+<img src="docs/photos/station-side.jpg" width="720" alt="Heimdall station prototype carried on the hand: mic array, Raspberry Pi 5, thermal camera on a pan-tilt head, Seeeduino">
+
+The Tag: a XIAO ESP32S3 and an IMU on a breadboard, with a Grove speaker, SOS button, touch pad and vibration motor around them. More photos and every pin in [`docs/HARDWARE.md`](docs/HARDWARE.md).
+
+<img src="docs/photos/tag.jpg" width="540" alt="Heimdall Tag prototype: XIAO ESP32S3 and IMU on a breadboard with Grove speaker, button, touch pad and vibration motor">
+
 ## Live today
 
 - Chirps from phones and the Tag
