@@ -73,6 +73,35 @@ if __name__ == "__main__":         # standalone test:  python -m ear.modules.<na
 - Returning from `run()` without an exception means "nothing to do" (e.g. no device found): health shows `off` and it is not restarted. Raise if you want a retry.
 - `health` (every 5 s): `ok` running, `error` crashed or import failed, `off` returned or not enabled.
 
+## Audio (mic array)
+`ear/modules/audio.py`: Seeed **reSpeaker XVF3800 USB 4-Mic Array** (round case) → HEIMDALL-AC1 decode → GCC-PHAT bearing → `bearing`, `victim`, `noise` events. Run with `HEIMDALL_MODULES=mock,audio` (the mock then stops faking those). Standalone: `python -m ear.modules.audio` (or `--wav rec.wav` to replay a 6-channel recording).
+
+**Plug in:** the USB-C **next to the 3.5 mm jack** (the XMOS port), straight into the Pi. The other USB-C belongs to the XIAO ESP32 board and shows up as "Espressif", not as a mic. Red LED = muted (button on the case) = silence on every channel.
+
+**Firmware:** our kit (with XIAO) shipped with **I2S firmware, which is not a USB device at all**. It is flashed with Seeed's **`respeaker_xvf3800_usb_dfu_firmware_v2.1.1_16k6ch.bin`** (6 channels, 16 kHz: ch0 conference, ch1 ASR, **ch2-5 raw mics**). To reflash: unplug, **hold the mute button while plugging it back in** (red LED blinks = Safe Mode), then `bash ear/tools/audio/flash_xvf3800.sh` (asks for the Pi password). Check: `arecord -l` lists "reSpeaker XVF3800 4-Mic Array", and `python ear/tools/audio/xvf_probe.py --list` says 6 inputs.
+
+**Geometry** (seen from above, cable at 6 o'clock, **front = 12 o'clock = bearing 0**, +90 = right, SPEC 2). The mic holes are the corners of a **6.65 cm square** (9.35 cm diagonal):
+
+| Channel | Hole | (x, y) m |
+|---|---|---|
+| ch4 | 10:30 front-left | (+0.03325, −0.03325) |
+| ch5 | 1:30 front-right | (+0.03325, +0.03325) |
+| ch2 | 4:30 back-right | (−0.03325, +0.03325) |
+| ch3 | 7:30 back-left | (−0.03325, −0.03325) |
+
+Mount it flat on the mast with the **cable pointing to the back of the station** and a pen mark at 12 o'clock on the front arrow. Keep anything taller than the puck 10 cm away. If the front ever reads off, set `audio.bearing_offset_deg` in `ear/config.py`.
+
+**Calibrate / test:** `ssh -t heimdall@heimdall 'bash ~/Team-31/ear/tools/audio/calibrate.sh'`. It walks you through phone positions: on `modem_test.html`, band 1, tap **Play burst** (every 3 s), press Enter at each spot, and it prints mean ± std + decode rate and saves `~/calib/*.wav`. For one spot: `python ear/tools/audio/doa_test.py --true 90`. Unit tests: `python -m pytest ear/tools/audio/test_doa.py`.
+- **Line of sight matters.** A laptop or a person between the phone and the puck made "behind" read as "front" in our tests (a reflection beats the blocked direct path). With a clear path, behind read −179°.
+- **Point the phone's speaker (its bottom edge) at the puck.** Facing away, the strongest sound at the puck was a wall reflection: left read −19° instead of −90°; pointed at the puck it read −99.7 ± 0.5.
+- Calibration at 2 m (true → mean ± std, decoded): 0 → +1.4 ± 0.4 (95%), +90 → +86.6 ± 0.9 (95%), +45 → +53.7 ± 1.0 (95%), 180 → about −177 (16%: quiet from behind), −90 → −99.7 ± 0.5 (95%). At 4 m: 0 → 4° off, +90 → +89.5 ± 1.5 (95%).
+
+**Relay demo switch:** on stage the station can hear the victim's phone directly, so to show a relay: `HEIMDALL_IGNORE_DIRECT=1A2B ear/tools/restart_ear.sh`. The station drops 1A2B's **hops-0** frames (one log line each) and shows the relayed copy as "1A2B (via relay)". Turn it off with a plain `ear/tools/restart_ear.sh`. Permanent version: `audio.ignore_direct_ids` in `ear/config.py`.
+
+**Rules it follows:** a new id is `confirmed: false` until a second frame within 60 s, then stays confirmed; an unconfirmed id is dropped after 60 s (SPEC 1.7.6). One record per id: a relayed copy only refreshes "last heard" if a direct frame came in the last 30 s. Relayed frames publish **no `bearing`** (their direction is the relaying phone's, not the victim's), so auto-aim never points at a relay. A phone's `heard` report becomes a victim with `deg: null` if the station hasn't heard that id itself in 30 s. `noise` = mean power per band of the decode channel's last second (raw mic, so levels are low: about −70 to −100 dBFS in a quiet room).
+
+**Restart the Ear** (always this way, so pkill can't hit your own SSH session): `ear/tools/restart_ear.sh [modules]` (default `mock,audio`, log `~/ear.log`).
+
 ## Field network
 - The Pi runs Wi-Fi hotspot **`HEIMDALL`**, password **`heimdallforge26`**, Pi at **`10.42.0.1`**.
 - Operator / victim phones join it and open **`https://10.42.0.1:8443/`** (debug: `https://10.42.0.1:8443/debug.html`). No internet on this network.

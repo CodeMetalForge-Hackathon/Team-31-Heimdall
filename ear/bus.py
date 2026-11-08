@@ -68,6 +68,11 @@ class Bus:
         with self._lock:
             self._subs.append(sub)
 
+    def drop_victim(self, vid) -> None:
+        """Forget a victim (e.g. unconfirmed and not heard again), so new clients don't get it."""
+        with self._lock:
+            self._victims.pop(vid, None)
+
     def set_frame(self, jpeg: bytes) -> None:
         self._frame = jpeg
 
