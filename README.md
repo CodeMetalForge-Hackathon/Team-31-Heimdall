@@ -37,6 +37,15 @@ The Tag: a XIAO ESP32S3 and an IMU on a breadboard, with a Grove speaker, SOS bu
 
 <img src="docs/photos/tag.jpg" width="540" alt="Heimdall Tag prototype: XIAO ESP32S3 and IMU on a breadboard with Grove speaker, button, touch pad and vibration motor">
 
+## Videos
+
+Both are on Google Drive, open to anyone with the link.
+
+| Video | What it shows |
+|---|---|
+| [Student-made demo](https://drive.google.com/file/d/1mWrAioiMpH-IkVxtwFYfw7j0TqQf2ywm/view?usp=share_link) (1 min 13 s) | Shot by the team at the venue: the station carried on the hand and set down on the cardboard stage, a phone with its SOS page in the rubble, the operator page on a laptop, and a teammate climbing into the rubble box. |
+| [Drone Operator Interface in the browser](https://drive.google.com/file/d/10pCqzMLARjKWCjvsHLSTGK8iDbOKLPA5/view?usp=sharing) (screen recording, 78 min, unedited) | The operator page (`web/operator.html`) as it looks in a browser on the station's Wi-Fi: the direction banner, the thermal picture and the triage list. |
+
 ## Live today
 
 - Chirps from phones and the Tag
