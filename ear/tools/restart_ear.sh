@@ -9,6 +9,11 @@ MODS="${1:-mock,audio}"
 cd "$(dirname "$0")/../.."
 PAT='[p]ython -m ear.main'
 
+# "activating" too: with Restart=always the service sits in that state for 3 s after a crash
+if [[ "$(systemctl is-active heimdall 2>/dev/null)" =~ ^(active|activating|reloading)$ ]]; then
+  echo "The heimdall service is running (demo_up.sh). Stop it first: ear/tools/demo_up.sh --stop"; exit 1
+fi
+
 if pgrep -f "$PAT" >/dev/null; then
   pkill -f "$PAT"
   for _ in $(seq 1 50); do pgrep -f "$PAT" >/dev/null || break; sleep 0.1; done
