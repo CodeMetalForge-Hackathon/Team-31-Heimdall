@@ -67,7 +67,8 @@ The Tag: a XIAO ESP32S3 and an IMU on a breadboard, with a Grove speaker, SOS bu
 | [`web/`](web/) | the phone and operator web app |
 | [`firmware/`](firmware/) | the Tag (`tag/`) and the head controller (`servo_knock/`) |
 | [`modem/`](modem/) | the Python reference modem and the cross-language tests |
-| [`pitch/`](pitch/) | script, Q&A, deck |
+| [`pitch/deck_v3.pdf`](pitch/deck_v3.pdf) | the pitch deck (11 slides) |
+| [`pitch/`](pitch/) | script, Q&A, earlier decks |
 
 ## Why the name
 
