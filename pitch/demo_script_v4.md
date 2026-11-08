@@ -1,7 +1,7 @@
 # HEIMDALL · Demo script v4 (about 75 seconds)
 
 Built from v3 at 03:40 Sunday for the 05:00 run (Giorgi reviews when he's up). Giorgi narrates. Mika and Erdeni run the hardware. Namig runs the laptop and the backup video.
-Operator phone mirrored on the big screen. Anything in `[TBD: ...]` is waiting on someone; do not say it until it's filled in.
+The operator page runs on the laptop, full screen on the projector (thermal, direction and triage side by side). Anything in `[TBD: ...]` is waiting on someone; do not say it until it's filled in.
 
 ## What changed since v3
 - **Cut, and never claimed as working:** LoRa to the command post (the closing line now says "next"), knock-back on the Tag, flying the drone (it stays on the table).
@@ -24,14 +24,14 @@ Operator phone mirrored on the big screen. Anything in `[TBD: ...]` is waiting o
 **The Tag, then the phones (in this order)**
 - [ ] **T-15 or earlier: the Tag on its power bank.** It starts beaconing by itself, status Injured. Mika holds it.
 - [ ] **Phone A, at least 3 minutes after the Tag:** victim page, settings: **relay OFF**, status **Injured**. Tap SOS. Propped up in pile A's opening, speaker toward the station.
-- [ ] **Phone C:** open `https://10.42.0.1:8443/victim.html?mode=relay` and tap SOS. The screen says "Relay only". On its mark next to pile B.
+- [ ] **Phone C:** open `https://10.42.0.1:8443/victim.html?mode=relay` and tap **Start relay**. The button then says Relaying. On its mark next to pile B.
 - [ ] Every phone: volume to max, iPhone silent switch **off**, Auto-Lock: Never, page open.
 - [ ] Every phone and the operator laptop: on the **HEIMDALL** Wi-Fi, with auto-join **off** for every other network (after a power cut they otherwise drift back to the venue Wi-Fi).
 
 **Station and screens**
 - [ ] Namig: `ear/tools/demo_up.sh --relay A001` [TBD: `--bands` / `--acc` from Namig's direction check]. No fake data.
 - [ ] Camera head in **AUTO**.
-- [ ] Operator phone mirrored to the projector. Both victim cards solid (not "unconfirmed"); the Tag's card says **via 1 relay**.
+- [ ] Laptop on the projector: `https://10.42.0.1:8443/operator.html`, full screen, browser zoom until the three panels fill the screen. Both victim cards solid (not "unconfirmed"); the Tag's card says **via 1 relay**.
 - [ ] Backup video paused at 0:00 on the laptop, one key away. Laptop on charge.
 - [ ] Stopwatch ready (Giorgi).
 
@@ -42,11 +42,11 @@ Operator phone mirrored on the big screen. Anything in `[TBD: ...]` is waiting o
 | 0:00 to 0:08 | Mika crouches at pile B holding the Tag in the opening, moving it gently. | Two piles of rubble. | "Two people are trapped here. One has a phone. One has our Tag." | None needed. |
 | 0:08 to 0:20 | Erdeni carries the station in, sets it on X, steps back. The head turns about 35° left to Victim A. | The camera head turning by itself. Thermal box on the warm target. | "In the field a small drone scouts ahead; venue rules keep ours on the table today. The station hears the chirp, works out the direction, and turns the thermal camera to look." | No turn within 15 s: Namig switches to the backup video. "Here is the same run from tonight." Thermal not live on the Pi: "the thermal view comes from the camera's phone app today" [TBD: thermal live on Pi, Erdeni]. |
 | 0:20 | **Cue:** when Erdeni steps back, Mika sets the Tag down in the opening, lets go, and doesn't touch it again. | Nothing yet. | (keep talking) | None. |
-| 0:20 to 0:32 | Namig points at the screen. | Operator phone: arrow "TURN LEFT 35°". Triage list: A and the Tag, both injured. | "The operator sees which way to walk. And a list of who's trapped, how hurt, and how many people are with them." | Arrow missing: point at the head instead. "The camera already points the way." |
+| 0:20 to 0:32 | Namig points at the screen. | Operator screen: banner "35° left" and the blue line to pile A. Triage list: A and the Tag, both injured. | "The operator sees which way to walk. And a list of who's trapped, how hurt, and how many people are with them." | Arrow missing: point at the head instead. "The camera already points the way." |
 | 0:32 to 0:42 | Namig points at relay phone C, then at the Tag's purple "via 1 relay". | The Tag's card with **via 1 relay**. | "One honest note. This room is small, so the station would hear everyone directly. We set it to ignore the Tag's own signal. It only gets through because this phone heard it and passed it on. That's how a signal gets out from deep inside." | No relayed frames: open phone C's relay log on screen: "Passed on … hop 1". |
-| 0:42 to 0:54 | Nobody touches anything. The Tag has been still for over 20 s. | The Tag's card pulses red **STOPPED MOVING** and jumps to the top. **The head swings right from A to the Tag by itself.** | "This person just stopped moving. That makes them the most urgent. Watch the camera: nobody is touching it. It decides on its own who to look at first." | Not flipped yet: "In a few seconds this card jumps to the top" and wait up to 8 s. Card flips but the head doesn't swing: point at the card and the arrow, move on. |
+| 0:42 to 0:54 | Nobody touches anything. The Tag has been still for over 20 s. | The Tag's row jumps to the top with a pulsing red ring and **Stopped moving**. **The head swings right from A to the Tag by itself, and the operator arrow swings with it.** | "This person just stopped moving. That makes them the most urgent. Watch the camera: nobody is touching it. It decides on its own who to look at first." | Not flipped yet: "In a few seconds this card jumps to the top" and wait up to 8 s. Card flips but the head doesn't swing: point at the card and the arrow, move on. |
 | 0:54 to 1:04 | Erdeni knocks 3 times on the knock board on pile B. [TBD: knock board works, Erdeni] | Knock card: "3 knocks". | "The station also feels a rescuer's knocks. Next, the Tag will buzz so the person can knock back." | Knock card doesn't appear: skip the line, go to the close. Knock board not working at the 05:00 run: cut this beat. |
-| 1:04 to 1:12 | Giorgi points at the operator phone. | The triage list. | "Today the operator sees all of this here, over the station's own Wi-Fi, no internet needed. Next, each station reports to command over long-range radio." | None. |
+| 1:04 to 1:12 | Giorgi points at the operator screen. | The triage list. | "Today the operator sees all of this here, over the station's own Wi-Fi, no internet needed. Next, each station reports to command over long-range radio." | None. |
 
 **Global fallback:** if sound fails at any point (noisy room, judges talking over it), Namig plays the backup video and Giorgi narrates the same lines over it. Never debug live.
 
@@ -61,6 +61,6 @@ Operator phone mirrored on the big screen. Anything in `[TBD: ...]` is waiting o
 - [ ] The head finds A within 12 s of the station landing on X.
 - [ ] The Tag's card says "via 1 relay" the whole time.
 - [ ] The Tag flips to "stopped moving" between 0:41 and 0:52 when set down at 0:20, and the head swings by itself.
-- [ ] Nobody touched the operator phone's cards during the run.
+- [ ] Nobody clicked the cards on the operator screen during the run.
 - [ ] The relay sentence sounds calm, not like an excuse.
-- [ ] Backup video recorded from the first good full run (wide shot from behind the station + operator phone screen recording).
+- [ ] Backup video recorded from the first good full run (wide shot from behind the station + a screen recording of the laptop's operator page, Cmd+Shift+5).
