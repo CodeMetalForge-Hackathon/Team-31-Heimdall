@@ -1,8 +1,8 @@
-# HEIMDALL SPEC v1.2 (shared contract)
+# HEIMDALL SPEC v1.3 (shared contract)
 
 Every part of Heimdall (Tag firmware in C++, phone web app in JS, Ear in Python, command post) must follow this file **exactly**. If something here is wrong or impossible, tell Namig. Don't silently change it in your own code.
 
-Owner: Namig. Version: **v1.2**, Sun Nov 8, 02:30. Changes from v1.1 are marked **(v1.2)**: the relay band (1.6), the Tag clock tolerance (1.7 step 5), phones' `heard` reports (section 3). Changes from v1 are marked **(v1.1)**: the motion window (1.3, 1.5), relay timing (1.6), receiver steps 5, 6 and 8 (1.7), `victim.confirmed` and the `thermal_det` box corner (section 3). The air format and the test vectors did not change.
+Owner: Namig. Version: **v1.3**, Sun Nov 8, 03:40. Changes from v1.2 are marked **(v1.3)**: relay-only phones (1.6). Changes from v1.1 are marked **(v1.2)**: the relay band (1.6), the Tag clock tolerance (1.7 step 5), phones' `heard` reports (section 3). Changes from v1 are marked **(v1.1)**: the motion window (1.3, 1.5), relay timing (1.6), receiver steps 5, 6 and 8 (1.7), `victim.confirmed` and the `thermal_det` box corner (section 3). The air format and the test vectors did not change.
 
 ---
 
@@ -75,6 +75,8 @@ A phone in victim mode with "relay" on:
 3. Waits a random 1.5 to 4.0 s. If it hears any preamble during that wait, it waits again (max 3 times, then drops it).
 4. Transmits the **same payload with hops + 1** (recompute the CRC) on band `(received band + 2) % 4`. **(v1.2)** It was + 1, the original's next band, so a relay could collide with the original's next frame.
 5. Never plays two frames at once: if its own beacon is playing or due in the next 2.5 s, it sends the relay right after its own frame ends. A phone never decodes or relays its own id. **(v1.1)**
+
+**Relay-only phones (v1.3):** a phone that opens the victim page with `?mode=relay` follows steps 1 to 5 but never sends a beacon of its own, so it never shows up as a victim. Its SOS button only starts listening and relaying. On stage this is relay phone C.
 
 The Ear keeps one record per id, prefers hops 0, and labels relayed records "via relay".
 
