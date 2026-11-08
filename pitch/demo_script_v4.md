@@ -5,10 +5,10 @@ The operator page runs on the laptop, full screen on the projector (thermal, dir
 
 ## What changed since v3
 - **Cut, and never claimed as working:** LoRa to the command post (the closing line now says "next"), knock-back on the Tag, flying the drone (it stays on the table).
-- **Victim B is "the Tag"** (id A001), our hardware Tag, heard directly by the station. If it fails its go/no-go, Victim B is a second phone (relay OFF, status Injured, SOS at least 3 minutes before phone A's).
+- **Victim B is "the Tag"** (id A001), our hardware Tag, heard directly by the station. If it fails its go/no-go, Victim B is a second phone (relay OFF, status Injured).
 - **The relay carries phone A, not the Tag.** Phones can't decode the Tag's sound (the station can), so phone C sits next to pile A and passes phone A's call on, and the station ignores phone A's own signal (`--relay 1429`). The Tag is heard directly, so it has its own direction for the swing. Phone A's relay stays OFF; only phone C relays.
 - **Phone A's Beacon ID is 1429.** If another phone plays phone A: Settings, Beacon ID 1429, Save, and close the old 1429 page.
-- **The Tag starts at least 3 minutes before phone A's SOS.** Once both victims are still and injured, the list and the head rank the one with more minutes since SOS first. That has to be the Tag, or the head never swings to it.
+- **No minute rule anymore (07:45).** Someone who just stopped moving goes to the top of the list and gets the camera, whatever the minutes since SOS. The Tag and phone A can start in any order, and switching the Tag off and on is harmless as long as it's beeping before the run.
 - **Phone C runs "relay only"** (`victim.html?mode=relay`). It listens and passes on, sends nothing of its own, and never shows up as a victim.
 - **Everything moves 8 s earlier** without the drone flight. The Tag goes down at 0:20 and flips to "stopped moving" between 0:41 and 0:52.
 
@@ -24,9 +24,9 @@ The operator page runs on the laptop, full screen on the projector (thermal, dir
 
 **The Tag, then the phones (in this order)**
 - [ ] **T-15 or earlier: the Tag on its power bank.** It starts beaconing by itself, status Injured. Mika holds it.
-- [ ] **Never press the Tag's SOS button after power-on.** It restarts its minutes at 0, and then it loses the tie with phone A. Hold the Tag by the board edge, not the touch pad (a touch changes its status; it starts as Injured).
+- [ ] **Never press the Tag's SOS button after power-on:** one press turns its beacon off. Hold the Tag by the board edge, not the touch pad (a touch changes its status; it starts as Injured).
 - [ ] Before the run: check the Tag's 5V wire and speaker plug. Both came loose once.
-- [ ] **Phone A, at least 3 minutes after the Tag:** victim page, Beacon ID **1429** at the top, settings: **relay OFF**, status **Injured**. Tap SOS. Propped up in pile A's opening, speaker toward the station.
+- [ ] **Phone A:** victim page, Beacon ID **1429** at the top, settings: **relay OFF**, status **Injured**. Tap SOS. Propped up in pile A's opening, speaker toward the station.
 - [ ] **Phone C:** open `https://10.42.0.1:8443/victim.html?mode=relay` and tap **Start relay**. The button then says Relaying. On its mark next to pile A.
 - [ ] Every phone: volume to max, iPhone silent switch **off**, Auto-Lock: Never, page open.
 - [ ] Every phone and the operator laptop: on the **HEIMDALL** Wi-Fi, with auto-join **off** for every other network (after a power cut they otherwise drift back to the venue Wi-Fi).

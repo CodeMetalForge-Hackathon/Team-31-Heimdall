@@ -12,7 +12,7 @@
   const SVGNS = 'http://www.w3.org/2000/svg';
   const STATUS_RANK = { critical: 0, injured: 1, no_response: 2, ok: 3 };
   const STATUS_LABEL = { critical: 'Critical', injured: 'Injured', no_response: 'No response', ok: 'OK' };
-  const STOP_WINDOW_MS = 2 * 60 * 1000;
+  const STOP_WINDOW_MS = 5 * 60 * 1000;   // "Stopped moving" tag and top rank last this long (same as the camera head)
   const UNCONF_HIDE_MS = 60 * 1000;
   const THERMAL_FOV = 55; // degrees, mock only
 
@@ -256,6 +256,8 @@
   // Unconfirmed beacons disappear 60 s after their last event (SPEC v1.1).
   const isVisible = (rec, now) => rec.confirmed || now - rec.heardAt <= UNCONF_HIDE_MS;
 
+  const motionRank = (r, now) => (r.v.motion ? 2 : (r.stoppedAt && now - r.stoppedAt < STOP_WINDOW_MS ? 0 : 1));
+
   function sortedVictims() {
     const now = Date.now();
     if (state.selected && state.victims.has(state.selected) && !isVisible(state.victims.get(state.selected), now)) state.selected = null;
@@ -263,7 +265,7 @@
       if (a.confirmed !== b.confirmed) return a.confirmed ? -1 : 1; // unconfirmed below every confirmed card
       const ra = STATUS_RANK[a.v.status] ?? 2, rb = STATUS_RANK[b.v.status] ?? 2;
       if (ra !== rb) return ra - rb;
-      const ma = a.v.motion ? 1 : 0, mb = b.v.motion ? 1 : 0; // not moving first
+      const ma = motionRank(a, now), mb = motionRank(b, now); // just stopped, then still, then moving
       if (ma !== mb) return ma - mb;
       return (Number(b.v.minutes) || 0) - (Number(a.v.minutes) || 0);
     });

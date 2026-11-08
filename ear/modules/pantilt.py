@@ -1,7 +1,8 @@
 """Pan-tilt head + knock sensor: the Seeeduino on USB serial (docs/SPEC.md section 4).
 
 - auto mode: aims the thermal camera at the most urgent confirmed victim
-  (critical > injured > no_response > ok; "stopped moving" first; then longest since SOS),
+  (critical > injured > no_response > ok; then "just stopped moving" (last 5 min) > still > moving;
+  then longest since SOS),
   or else at the newest confident bearing.
 - manual mode: follows pantilt_cmd from the operator page; pantilt_mode "auto" switches back.
 - publishes `pantilt` after every move and every 2 s, and `knock` for every KNOCK line
@@ -35,6 +36,7 @@ PAN_MIN, PAN_MAX = -90, 90
 TILT_MIN, TILT_MAX = -30, 25
 RANK = {"critical": 0, "injured": 1, "no_response": 2, "ok": 3}
 HOME = (0, 0)   # straight ahead and level, where the board puts the head on power-up
+STOP_WINDOW_S = 300   # someone who stopped moving in the last 5 min outranks everyone else of the same status
 
 
 def clamp(v, lo, hi):
@@ -59,7 +61,12 @@ class Aimer:
         ts = ev.get("ts") or time.time()
         with self.lock:
             v = self.victims.setdefault(vid, {})
-            v.update(status=ev.get("status"), motion=bool(ev.get("motion")),
+            moving = bool(ev.get("motion"))
+            if moving:
+                v["stopped_ts"] = None
+            elif v.get("motion"):        # was moving, now still: this person just stopped moving
+                v["stopped_ts"] = ts
+            v.update(status=ev.get("status"), motion=moving,
                      confirmed=ev.get("confirmed", True), minutes=ev.get("minutes") or 0, ts=ts)
             if ev.get("deg") is not None:
                 v["deg"], v["deg_ts"] = float(ev["deg"]), ts
@@ -97,12 +104,20 @@ class Aimer:
                      and now - v.get("deg_ts", 0) <= fresh]
             if cands:
                 vid, v = min(cands, key=lambda kv: (RANK.get(kv[1].get("status"), 4),
-                                                    kv[1].get("motion", True),
+                                                    motion_rank(kv[1], now),
                                                     -(kv[1].get("minutes") or 0)))
                 return clamp(v["deg"], PAN_MIN, PAN_MAX), self.cfg["tilt"], "victim " + vid
             if self.last_bearing and now - self.last_bearing[1] <= fresh:
                 return clamp(self.last_bearing[0], PAN_MIN, PAN_MAX), self.cfg["tilt"], "bearing"
             return None
+
+
+def motion_rank(v, now):
+    """0 = just stopped moving (most urgent), 1 = still, 2 = moving (responsive)."""
+    if v.get("motion", True):
+        return 2
+    st = v.get("stopped_ts")
+    return 0 if st is not None and now - st < STOP_WINDOW_S else 1
 
 
 def candidate_ports():

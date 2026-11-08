@@ -67,3 +67,19 @@ def test_starts_straight_aims_then_parks_straight():
                  "deg": -30.0, "confirmed": True, "ts": time.time()})
     time.sleep(0.6)
     assert len(moves(got)) == n, "nothing moves the head after it's parked"
+
+
+def test_just_stopped_moving_beats_more_minutes():
+    a = pantilt.Aimer(dict(pantilt.DEFAULTS))
+    t = time.time()
+    # Phone A: injured, still, 10 min since SOS. The Tag: injured, moving, only 1 min (switched on late).
+    a.on_victim({"id": "1429", "status": "injured", "motion": False, "minutes": 10, "deg": -27.0, "ts": t})
+    a.on_victim({"id": "A001", "status": "injured", "motion": True, "minutes": 1, "deg": 27.0, "ts": t})
+    assert a.target(t)[2] == "victim 1429", "while the Tag moves, phone A comes first"
+
+    a.on_victim({"id": "A001", "status": "injured", "motion": False, "minutes": 1, "deg": 27.0, "ts": t + 30})
+    assert a.target(t + 30)[2] == "victim A001", "the Tag just stopped moving: first, whatever the minutes"
+
+    a.on_victim({"id": "1429", "status": "injured", "motion": False, "minutes": 16, "deg": -27.0, "ts": t + 340})
+    a.on_victim({"id": "A001", "status": "injured", "motion": False, "minutes": 7, "deg": 27.0, "ts": t + 340})
+    assert a.target(t + 345)[2] == "victim 1429", "5 min after it stopped, it's just still: minutes decide again"
