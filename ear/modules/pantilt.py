@@ -60,6 +60,7 @@ class Aimer:
         self.lock = threading.Lock()
         self.mode = "auto"
         self.manual = (0.0, 0.0)
+        self.current = HOME        # where the head was last sent (bearing degrees), kept up to date by run()
         self.victims = {}          # id -> latest fields + "deg", "deg_ts"
         self.last_bearing = None   # (deg, ts) of the newest confident bearing
 
@@ -100,6 +101,8 @@ class Aimer:
     def on_mode(self, ev):
         if ev.get("mode") in ("auto", "manual"):
             with self.lock:
+                if ev["mode"] == "manual" and self.mode != "manual":
+                    self.manual = self.current   # take over where the head is, not where a manual command left it earlier
                 self.mode = ev["mode"]
 
     def target(self, now):
@@ -248,6 +251,7 @@ def run(bus, cfg: dict) -> None:
                     sp = servo_pan(cfg, pan)
                     send(f"P {sp} {tilt}")
                     last_sent, last_move = (pan, tilt), now
+                    aimer.current = (pan, tilt)
                     log.info("aim pan %d tilt %d (%s) -> servo %d", pan, tilt, why, sp)
                     last_status = 0.0   # publish right away
             if now - last_status >= cfg["status_s"]:

@@ -111,3 +111,17 @@ def test_reversed_servo_mount_still_aims_at_the_victim():
     pantilt._park_at_exit()
     time.sleep(0.3)
     assert moves(got)[-1] == "P 30 0", "parking is straight ahead, not servo 0"
+
+
+def test_switching_to_manual_keeps_the_head_where_it_is():
+    a = pantilt.Aimer(dict(pantilt.DEFAULTS))
+    t = time.time()
+    a.on_cmd({"pan": 75, "tilt": 0})                 # an earlier manual command
+    a.on_mode({"mode": "auto"})
+    a.on_victim({"id": "A001", "status": "ok", "motion": False, "minutes": 3, "deg": 61.0, "ts": t})
+    assert a.target(t)[:2] == (61.0, 0), "auto: on the Tag"
+    a.current = (61, 0)                               # run() records every move here
+    a.on_mode({"mode": "manual"})
+    assert a.target(t) == (61, 0, "manual"), "Manual takes over at the current position, not at the stale 75"
+    a.on_cmd({"pan": 20, "tilt": 5})
+    assert a.target(t) == (20.0, 5.0, "manual"), "a new command still moves it"
