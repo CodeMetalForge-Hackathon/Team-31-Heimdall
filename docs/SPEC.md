@@ -66,7 +66,7 @@ Bit stream of vector 1: `000110100010101100100000111110010110000001100110`
 - Period: **8 s** in demo mode (default for the hackathon), 30 s in normal mode. Demo mode also shortens the motion window to 20 s (1.3). **(v1.1)**
 - Add random jitter of ±1.0 s to every period, so two beacons don't collide forever.
 - Band for transmission number k (k = 0, 1, 2 …): `band = (k + id) % 4`.
-- **Burst mode** (test only, e.g. direction calibration): period 3 s, same band every time (band 1).
+- **Burst mode** (test only, e.g. direction calibration): period 3 s, same band every time (band 1). **(v1.1: wording only)**
 
 ### 1.6 Relay rule (phones only)
 A phone in victim mode with "relay" on:
@@ -84,7 +84,7 @@ The Ear keeps one record per id, prefers hops 0, and labels relayed records "via
 3. Detection: peak of |corr| divided by the median of |corr| over the last 2 s > **8.0**.
 4. The peak marks the preamble end. Symbol k starts at `t_end_preamble + 0.010 + k * 0.040`.
 5. For each symbol, compute the **non-coherent** correlation magnitude `|<analytic signal, complex template>|` with the up template and with the down template. Bigger one wins. Coherent (real-valued) correlation fails under reverb. **Track timing (v1.1):** a 0.1% clock error drifts about 1.9 ms by the last symbol, so fit the symbol timing as offset + drift over all 48 symbols, then search ±0.25 ms around that line. `modem/` does exactly this.
-6. Check the CRC and drop bad frames. Also drop frames whose 2 reserved bits aren't 0, or whose preamble correlation or symbol quality is weak (the gates in `modem/`). **Confirmation (v1.1):** even with these gates, about 1 in 1024 garbage decodes gets through, so a receiver treats a new id as **unconfirmed** until a second valid frame with the same id arrives within 60 s. The Ear publishes an unconfirmed victim with `"confirmed": false` and forgets it after 60 s if no second frame comes. Once confirmed, an id stays confirmed.
+6. Check the CRC and drop bad frames. Also drop frames whose 2 reserved bits aren't 0, or whose preamble correlation or symbol quality is weak (the gates in `modem/`). **Confirmation (v1.1):** the CRC plus the reserved bits still pass about 1 in 1024 garbage decodes, and the extra gates don't catch them all (N2 saw 1 bad frame in 30 min of adversarial noise), so a receiver treats a new id as **unconfirmed** until a second valid frame with the same id arrives within 60 s. The Ear publishes an unconfirmed victim with `"confirmed": false` and forgets it after 60 s if no second frame comes. Once confirmed, an id stays confirmed.
 7. Report: id, all fields, band, `snr_db = 20*log10(peak/median)`, time of arrival.
 8. **Direction (Ear):** GCC-PHAT between every mic pair, limited to the frame's band, on the 200 ms preamble or on the whole frame. **(v1.1)** At 16 kHz one sample is 2.1 cm of sound travel, so interpolate the correlation (upsample at least 16×) before reading delays. Then fit the bearing: try every angle from −180 to 180° in 1° steps, keep the one whose predicted pair delays score the highest summed correlation, and refine around it. Bearing convention below.
 
