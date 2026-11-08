@@ -33,7 +33,7 @@ CONFIG = {
                    3: (-0.03325, -0.03325)},  # 7:30 back-left
         "speed_of_sound": 343.0,     # m/s
         "phat_beta": 0.7,            # GCC-PHAT whitening exponent (1 = full PHAT); 0.7 won on the calibration set
-        "bearing_offset_deg": 0.0,   # added to every bearing so "ahead" reads 0 (calibration)
+        "bearing_offset_deg": 180.0, # added to every bearing so "ahead" reads 0 (calibration). 180: station turned so the camera faces the piles, array now backwards (N11)
         "quiet_db": -55.0,           # noise.quiet = every band below this (dBFS)
         "confirm_s": 60.0,           # a new id needs a 2nd frame within this to be confirmed (SPEC 1.7.6)
         "direct_hold_s": 30.0,       # a hops-0 frame this recent makes relayed copies only refresh "last heard"
