@@ -92,12 +92,25 @@
 
   // ---------- SOS button ----------
   let active = false;
+  // ?mode=relay (SPEC v1.3): this phone only passes on other SOS calls, so it doesn't ask about the person.
+  const RELAY_ONLY = new URLSearchParams(location.search).get('mode') === 'relay';
   function setActiveUI(on) {
     active = on;
     $('sos-wrap').classList.toggle('active', on);
     $('sos').setAttribute('aria-pressed', String(on));
-    $('sos').innerHTML = on ? 'SOS ACTIVE<small>tap to stop</small>' : 'SEND SOS';
-    if (!on) $('beacon-line').innerHTML = '<span class="beacon-idle">Tap the button to call for help</span>';
+    if (RELAY_ONLY) $('sos').innerHTML = on ? 'Relaying<small>Tap to stop</small>' : 'Start relay';
+    else $('sos').innerHTML = on ? 'SOS on<small>Tap to stop</small>' : 'SOS';
+    if (!on) {
+      $('beacon-line').innerHTML = RELAY_ONLY
+        ? '<span class="beacon-idle">Passes on other SOS calls, sends none of its own</span>'
+        : '<span class="beacon-idle">Tap to call for help</span>';
+    }
+  }
+  if (RELAY_ONLY) {
+    for (const h of ['h-status', 'h-people', 'h-floor']) {
+      const sec = document.querySelector('section[aria-labelledby="' + h + '"]');
+      if (sec) sec.classList.add('hidden');
+    }
   }
   $('sos').addEventListener('click', () => {
     // fn() is called synchronously here: browsers only allow sound + mic from a direct tap.
@@ -110,10 +123,9 @@
     if (!s.on) { if (active) setActiveUI(false); return; }
     if (!active) setActiveUI(true);
     const parts = [];
-    if (s.band !== undefined && s.band !== null) parts.push('Chirping on band <b>' + Number(s.band) + '</b>');
-    if (s.nextInSec !== undefined && s.nextInSec !== null) parts.push('next in <b>' + Math.max(0, Math.round(s.nextInSec)) + ' s</b>');
-    if (s.sent !== undefined && s.sent !== null) parts.push('<b>' + Number(s.sent) + '</b> sent');
-    if (s.trigger === 'fall') parts.push('started by fall');
+    if (s.nextInSec !== undefined && s.nextInSec !== null) parts.push('Next chirp in <b>' + Math.max(0, Math.round(s.nextInSec)) + ' s</b>');
+    if (s.sent !== undefined && s.sent !== null) parts.push(Number(s.sent) + ' ' + (RELAY_ONLY ? 'passed on' : 'sent'));
+    if (s.trigger === 'fall') parts.push('started by a fall');
     $('beacon-line').innerHTML = parts.join(' · ') || 'Beacon on';
   }
 
