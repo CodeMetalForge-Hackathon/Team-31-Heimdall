@@ -18,7 +18,7 @@ log = logging.getLogger("mock")
 REPLACED_BY = {
     "audio": {"victim", "bearing", "sound", "noise"},
     "thermal": {"frame", "thermal_det"},
-    "pantilt": {"pantilt"},
+    "pantilt": {"pantilt", "knock"},
     "knock": {"knock"},
     "radar": {"radar"},
     "lora": {"lora"},
