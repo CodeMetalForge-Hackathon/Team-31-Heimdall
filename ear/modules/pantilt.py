@@ -29,7 +29,7 @@ DEFAULTS = {
     "status_s": 2.0,      # publish a pantilt event at least this often
 }
 PAN_MIN, PAN_MAX = -90, 90
-TILT_MIN, TILT_MAX = -30, 60
+TILT_MIN, TILT_MAX = -30, 25
 RANK = {"critical": 0, "injured": 1, "no_response": 2, "ok": 3}
 
 
